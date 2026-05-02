@@ -51,7 +51,19 @@ class StartupError(RuntimeError):
 async def build_context(settings: Settings, config: LoadedConfig) -> ToolContext:
     """Load tokens, validate them, build the AccelaClient, return a context."""
     store = TokenStore(settings.token_path, settings.mcp_key.get_secret_value())
-    tokens = store.load()
+    try:
+        tokens = store.load()
+    except RuntimeError as e:
+        # `TokenStore.load` raises RuntimeError on Fernet decryption failure
+        # (typically: ACCELA_MCP_KEY changed since tokens were saved — e.g.
+        # a CLI install left tokens.json behind, then the user installed the
+        # MCPB and got a freshly generated key). Route to bootstrap mode so
+        # `accela_login` from chat can mint fresh tokens that overwrite the
+        # stale file.
+        raise StartupError(
+            f"Could not decrypt the persisted token file: {e} "
+            "Run accela_login from chat to re-authenticate."
+        ) from e
     if tokens is None:
         raise StartupError(
             "No persisted tokens found. Run `accela-mcp auth` to authenticate first."
