@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "accela-mcp"
-version = "0.4.0"
+version = "0.4.1"
 description = "Model Context Protocol server for the Accela Construct API"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -12,13 +12,18 @@ requires-python = ">=3.11"
 authors = [{ name = "Accela MCP Maintainers" }]
 keywords = ["mcp", "accela", "civic-platform", "permits", "government"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
+    "Topic :: Office/Business",
+    "Typing :: Typed",
 ]
 dependencies = [
     "mcp>=1.0",

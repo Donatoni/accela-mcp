@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "accela-mcp",
   "display_name": "Accela MCP",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "MCP server for the Accela Construct API — search records, inspections, fees, documents, and more.",
   "long_description": "Connects Claude Desktop to your Accela tenant. Search permits, look up parcels and contacts, list inspections, read fees and documents — all from chat.\n\n## After installing\n\n1. **Get your Accela app credentials.** On the [Accela Developer Portal](https://developer.accela.com), create an app and copy its App ID and App Secret. Use the redirect URI `http://localhost:8765/oauth/callback` (or pick your own and configure it on both sides).\n2. **Fill in the Configuration tab below.** App ID, App Secret, Agency, Environment, and Redirect URI are required. Leave **Encryption Key** blank — the server generates one on first run and persists it locally.\n3. **Pick which Accela features to expose.** The toggles below map to capability groups. Read-only groups are on by default; write groups require flipping **Allow Write Tools** as a master safety switch.\n4. **Log in from chat.** Once installed, ask Claude:  *“Log me into Accela.”* Claude will call the `accela_login` tool, open your browser to Accela's authorize page, capture the redirect, and save tokens.\n5. **Restart Claude Desktop** so the rest of the Accela tools become visible.\n\n## In-chat tools that don't need login\n\n- `accela_auth_status` — check whether you're logged in and when your token expires.\n- `accela_login` — start (or repeat) the OAuth login.\n\nIf an Accela API call later returns 401, the response includes a hint pointing back at `accela_login`.",
   "author": {
