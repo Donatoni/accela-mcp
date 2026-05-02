@@ -161,9 +161,16 @@ class AccelaClient:
         *,
         params: Mapping[str, Any] | None = None,
         json: Any = None,
+        files: Any = None,
+        data: Mapping[str, Any] | None = None,
         extra_headers: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Issue an HTTP request, applying retries and refresh-on-401."""
+        """Issue an HTTP request, applying retries and refresh-on-401.
+
+        Pass either `json=` for JSON bodies (the common case) or
+        `files=`/`data=` for multipart uploads. Multipart auto-strips the
+        `Content-Type: application/json` default header so httpx can write
+        the right boundary."""
 
         # Drop None-valued params so callers can pass optional filters cleanly.
         clean_params: dict[str, Any] | None = (
@@ -193,6 +200,8 @@ class AccelaClient:
                         path=path,
                         params=clean_params,
                         json=json,
+                        files=files,
+                        data=data,
                         extra_headers=extra_headers,
                         attempt_no=attempt.retry_state.attempt_number,
                         state=state,
@@ -225,17 +234,28 @@ class AccelaClient:
         path: str,
         params: dict[str, Any] | None,
         json: Any,
+        files: Any = None,
+        data: Mapping[str, Any] | None = None,
         extra_headers: Mapping[str, str] | None,
         attempt_no: int,
         state: dict[str, Any],
     ) -> dict[str, Any]:
+        # Multipart uploads need httpx to write the boundary, so drop our
+        # default Content-Type header.
+        is_multipart = files is not None or data is not None
+        headers = self._headers(extra=extra_headers)
+        if is_multipart:
+            headers.pop("Content-Type", None)
+
         try:
             response = await self._client.request(
                 method,
                 path,
-                headers=self._headers(extra=extra_headers),
+                headers=headers,
                 params=params,
-                json=json,
+                json=json if not is_multipart else None,
+                files=files,
+                data=data,
             )
         except (httpx.TimeoutException, httpx.NetworkError) as e:
             log.warning(

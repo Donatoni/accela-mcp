@@ -18,8 +18,9 @@ from typing import Any, ParamSpec, TypeVar
 
 from accela_mcp.api.client import AccelaClient
 from accela_mcp.api.errors import AccelaAPIError, is_likely_emse_error
-from accela_mcp.capabilities import LoadedConfig
+from accela_mcp.capabilities import LoadedConfig, PaymentsConfig, WritesConfig
 from accela_mcp.observability.logging_config import get_logger
+from accela_mcp.safety import AuditLog
 from accela_mcp.settings import Settings
 from accela_mcp.utils.cache import TTLCache
 from accela_mcp.utils.redaction import redact_mapping
@@ -37,10 +38,19 @@ class ToolContext:
     config: LoadedConfig
     client: AccelaClient
     reference_cache: TTLCache[dict[str, Any]]
+    audit_log: AuditLog | None = None
 
     def tokens_scope_list(self) -> list[str]:
         """Parsed scope list from the active access token."""
         return [s for s in (self.client.tokens.scope or "").split() if s]
+
+    @property
+    def writes_config(self) -> WritesConfig:
+        return self.config.capabilities.writes
+
+    @property
+    def payments_config(self) -> PaymentsConfig:
+        return self.config.capabilities.payments
 
 
 P = ParamSpec("P")

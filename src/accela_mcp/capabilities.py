@@ -57,8 +57,8 @@ _GROUP_CATALOG: dict[str, dict[str, Any]] = {
     "records_write": {
         "default_on": False,
         "scopes": ["records"],
-        "module": None,  # not implemented in v1
-        "description": "Create / update records (v2).",
+        "module": "accela_mcp.tools.records_write",
+        "description": "Create / update records. Requires writes.enabled.",
     },
     "inspections_read": {
         "default_on": True,
@@ -69,8 +69,11 @@ _GROUP_CATALOG: dict[str, dict[str, Any]] = {
     "inspections_write": {
         "default_on": False,
         "scopes": ["inspections"],
-        "module": None,
-        "description": "Schedule / reschedule / cancel / result inspections (v2).",
+        "module": "accela_mcp.tools.inspections_write",
+        "description": (
+            "Schedule / reschedule / cancel / result / assign inspections. "
+            "Requires writes.enabled."
+        ),
     },
     "documents_read": {
         "default_on": True,
@@ -81,8 +84,8 @@ _GROUP_CATALOG: dict[str, dict[str, Any]] = {
     "documents_write": {
         "default_on": False,
         "scopes": ["documents"],
-        "module": None,
-        "description": "Upload documents to a record (v2).",
+        "module": "accela_mcp.tools.documents_write",
+        "description": "Upload documents to a record. Requires writes.enabled.",
     },
     "property_read": {
         "default_on": True,
@@ -105,8 +108,10 @@ _GROUP_CATALOG: dict[str, dict[str, Any]] = {
     "workflow_write": {
         "default_on": False,
         "scopes": ["records"],
-        "module": None,
-        "description": "Advance / update workflow tasks (v2).",
+        "module": "accela_mcp.tools.workflow_write",
+        "description": (
+            "Advance / update workflow tasks on a record. Requires writes.enabled."
+        ),
     },
     "fees_read": {
         "default_on": True,
@@ -117,14 +122,17 @@ _GROUP_CATALOG: dict[str, dict[str, Any]] = {
     "payments_read": {
         "default_on": False,
         "scopes": ["payments"],
-        "module": None,
-        "description": "Read payments on a record (v2).",
+        "module": "accela_mcp.tools.payments_read",
+        "description": "Read payments on a record.",
     },
     "payments_write": {
         "default_on": False,
         "scopes": ["payments"],
-        "module": None,
-        "description": "Initialize and commit citizen payments (v2).",
+        "module": "accela_mcp.tools.payments_write",
+        "description": (
+            "Initialize and commit citizen payments. Requires writes.enabled "
+            "AND payments.real_money_allowed."
+        ),
     },
     "reference_data": {
         "default_on": True,
@@ -135,8 +143,8 @@ _GROUP_CATALOG: dict[str, dict[str, Any]] = {
     "gis": {
         "default_on": False,
         "scopes": ["gis"],
-        "module": None,
-        "description": "Geocoding / reverse geocoding (v2).",
+        "module": "accela_mcp.tools.gis",
+        "description": "Geocoding and reverse-geocoding helpers.",
     },
     "search": {
         "default_on": True,
@@ -149,8 +157,8 @@ _GROUP_CATALOG: dict[str, dict[str, Any]] = {
     "reports": {
         "default_on": False,
         "scopes": ["reports"],
-        "module": None,
-        "description": "Run agency-defined reports (v2).",
+        "module": "accela_mcp.tools.reports",
+        "description": "List and run agency-defined reports.",
     },
     "admin_escape_hatch": {
         "default_on": False,
@@ -227,6 +235,41 @@ class AdminConfig(BaseModel):
         return v
 
 
+class WritesConfig(BaseModel):
+    """Master kill-switch and audit config for write tools.
+
+    `enabled` defaults to false even when an operator lists a `*_write`
+    group in `enabled_groups`. The MCP refuses to start in that mismatched
+    state — fail loud rather than fail silent.
+
+    `agency_environment_allowed`, when set, restricts confirmed writes to
+    listed environments (e.g., `["TEST"]`). Useful for staging an MCP
+    deployment that's ready for sandbox writes but not yet PROD.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    audit_log_path: Path | None = None
+    agency_environment_allowed: list[str] = Field(default_factory=list)
+
+
+class PaymentsConfig(BaseModel):
+    """Extra gate on top of the writes kill-switch for the payments group.
+
+    Even with `writes.enabled: true`, `payments_write` will not call
+    `/commit` (the irreversible step) unless `real_money_allowed` is true.
+    Setting `real_money_allowed: true` for a PROD-like environment
+    additionally requires `i_understand_this_spends_real_money: true` —
+    intentional friction.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    real_money_allowed: bool = False
+    i_understand_this_spends_real_money: bool = False
+
+
 class Capabilities(BaseModel):
     """Validated `capabilities.yaml` document."""
 
@@ -240,6 +283,8 @@ class Capabilities(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
     admin: AdminConfig = Field(default_factory=AdminConfig)
+    writes: WritesConfig = Field(default_factory=WritesConfig)
+    payments: PaymentsConfig = Field(default_factory=PaymentsConfig)
 
     @field_validator("enabled_groups")
     @classmethod
@@ -261,6 +306,48 @@ class Capabilities(BaseModel):
             raise ValueError(
                 "admin_escape_hatch is enabled but admin.raw_request_allowed_paths "
                 "is empty. Provide an explicit regex allowlist."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _writes_kill_switch_required(self) -> Capabilities:
+        """Refuse to start when a write group is listed but writes are off.
+
+        Fail-loud: an operator who pasted `records_write` into the YAML and
+        forgot to flip `writes.enabled` would otherwise see the group
+        register but every confirmed call get refused at runtime. Better to
+        catch it once at boot.
+        """
+        groups = self.resolved_groups()
+        write_groups = {g for g in groups if g.endswith("_write")}
+        if write_groups and not self.writes.enabled:
+            raise ValueError(
+                f"Capability group(s) {sorted(write_groups)!r} are enabled but "
+                "`writes.enabled` is false. Either remove those groups from "
+                "`enabled_groups` or set `writes.enabled: true` in capabilities.yaml."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _payments_real_money_friction(self) -> Capabilities:
+        """Require the no-typo flag before letting payments_write hit /commit.
+
+        Setting `payments.real_money_allowed: true` against an environment
+        whose name contains `PROD` requires also setting
+        `i_understand_this_spends_real_money: true` in the same file. This
+        is deliberate friction — the kind of thing that prevents a stray
+        edit from authorizing live transactions.
+        """
+        if (
+            self.payments.real_money_allowed
+            and "PROD" in self.environment.upper()
+            and not self.payments.i_understand_this_spends_real_money
+        ):
+            raise ValueError(
+                "payments.real_money_allowed is true against an environment "
+                f"that looks like production ({self.environment!r}). To proceed, "
+                "also set payments.i_understand_this_spends_real_money: true. "
+                "This is intentional friction."
             )
         return self
 
@@ -373,6 +460,29 @@ def get_tools_by_group_for(enabled: set[str]) -> dict[str, list[str]]:
         ],
         "search": ["accela_global_search"],
         "admin_escape_hatch": ["accela_raw_request"],
+        # Write groups — every tool defaults to dry-run; pass confirm=true
+        # to actually mutate.
+        "records_write": [
+            "accela_create_record_partial",
+            "accela_finalize_record",
+            "accela_update_record",
+        ],
+        "inspections_write": [
+            "accela_schedule_inspection",
+            "accela_reschedule_inspection",
+            "accela_cancel_inspection",
+            "accela_result_inspection",
+            "accela_assign_inspection",
+        ],
+        "documents_write": ["accela_upload_document_to_record"],
+        "workflow_write": ["accela_update_workflow_task"],
+        "payments_read": ["accela_list_record_payments"],
+        "payments_write": [
+            "accela_initiate_payment",
+            "accela_commit_payment",
+        ],
+        "gis": ["accela_geocode", "accela_reverse_geocode"],
+        "reports": ["accela_list_reports", "accela_run_report"],
     }
     return {g: catalog.get(g, []) for g in sorted(enabled) if g in catalog}
 
@@ -384,7 +494,9 @@ __all__ = [
     "CapabilityConfigError",
     "LoadedConfig",
     "LoggingConfig",
+    "PaymentsConfig",
     "RateLimitConfig",
+    "WritesConfig",
     "all_group_ids",
     "default_groups",
     "get_tools_by_group_for",

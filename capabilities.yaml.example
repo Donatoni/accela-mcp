@@ -30,13 +30,15 @@ enabled_groups:
   - reference_data
   - search
 
-  # Default-off groups — uncomment with caution:
+  # Default-off groups — uncomment with caution. Every `*_write` group
+  # additionally requires `writes.enabled: true` below; the server fails
+  # to start otherwise.
   # - records_write
   # - inspections_write
   # - documents_write
   # - workflow_write
   # - payments_read
-  # - payments_write
+  # - payments_write       # also requires payments.real_money_allowed below
   # - gis
   # - reports
   # - admin_escape_hatch   # also requires `admin.raw_request_allowed_paths` below
@@ -63,3 +65,32 @@ cache:
 #   raw_request_allowed_paths:
 #     - "^/v4/records(/.*)?$"
 #     - "^/v4/settings/.*$"
+
+# Required when ANY `*_write` group is enabled.
+#
+# Even with this turned on, every write tool defaults to `confirm: false`
+# (dry-run). The LLM must surface a preview to the human user and only
+# re-invoke with `confirm: true` after approval. The kill-switch here is
+# the second backstop — it refuses confirmed calls when off.
+#
+# `audit_log_path`: append-only JSON-line log of every confirmed write.
+# Recommended on for production. Defaults to none (writes audit to the
+# normal stderr log only).
+#
+# `agency_environment_allowed`: optional allowlist. When set, confirmed
+# writes are refused if the connected environment isn't in the list.
+# Useful for staging an MCP that's ready for sandbox writes but not yet
+# PROD.
+# writes:
+#   enabled: false
+#   audit_log_path: ~/.local/share/accela-mcp/audit.log
+#   agency_environment_allowed: ["TEST"]
+
+# Required when `payments_write` is enabled and you intend to actually
+# commit transactions. `accela_commit_payment` refuses to call /commit
+# unless `real_money_allowed: true`. If the connected environment looks
+# like PROD, also set `i_understand_this_spends_real_money: true` —
+# intentional friction.
+# payments:
+#   real_money_allowed: false
+#   i_understand_this_spends_real_money: false

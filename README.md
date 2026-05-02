@@ -10,8 +10,11 @@ Destructive and financial capability groups must be explicitly enabled in
 configuration. Tokens are stored encrypted at rest, refreshed
 automatically, and never logged.
 
-> Status: **v0.1.1** — implements the default read-only v1 tool catalog.
-> Write tools are deferred to v0.2.
+> Status: **v0.2.0** — full v1 read catalog plus the v2 write groups
+> (records, inspections, documents, workflow, payments) and the GIS /
+> reports groups. Every write tool is dry-run by default; an explicit
+> `confirm: true` is required to mutate Accela data, and a YAML-level
+> kill-switch (`writes.enabled`) guards every confirmed call.
 
 ---
 
@@ -252,10 +255,60 @@ claude mcp add accela --command accela-mcp --args serve \
 | `fees_read`                                                                  | on        | List fees, estimate fees, list invoices.                                                                                            |
 | `reference_data`                                                             | on        | Record types, statuses, departments, fee schedules (TTL-cached).                                                                    |
 | `search`                                                                     | on        | Cross-entity global search.                                                                                                         |
-| `records_write` / `inspections_write` / `documents_write` / `workflow_write` | off (v2)  | Write tools, deferred.                                                                                                              |
-| `payments_read` / `payments_write`                                           | off (v2)  | Financial tools.                                                                                                                    |
-| `gis` / `reports`                                                            | off (v2)  | Geocoding and report generation.                                                                                                    |
+| `records_write` / `inspections_write` / `documents_write` / `workflow_write` | off, opt-in | Mutating tools. Every tool is dry-run by default — confirmed calls require `writes.enabled: true` in YAML.                          |
+| `payments_read`                                                              | off, opt-in | Read payments on a record.                                                                                                          |
+| `payments_write`                                                             | off, opt-in | Initiate / commit payments. `commit` additionally requires `payments.real_money_allowed: true`; PROD adds a friction flag.          |
+| `gis`                                                                        | off, opt-in | Geocode / reverse-geocode helpers.                                                                                                  |
+| `reports`                                                                    | off, opt-in | List and run agency-defined reports.                                                                                                |
 | `admin_escape_hatch`                                                         | off       | `accela_raw_request` for endpoints not wrapped — gated by a regex path allowlist and an HTTP-method allowlist (default `GET` only). |
+
+## Write tools and the safety model
+
+Write tools mutate Accela data. To prevent the LLM from making
+unintended changes, this MCP enforces three layers of friction:
+
+1. **Every write tool is dry-run by default.** Calling without
+   `confirm=true` returns a structured *preview* — method, path, body,
+   summary, irreversibility flag — and does NOT call Accela. The LLM
+   must surface that preview to the human user, get explicit approval,
+   and then re-invoke with `confirm=true` to actually execute.
+2. **Master kill-switch in `capabilities.yaml`.** Listing a `*_write`
+   group in `enabled_groups` requires `writes.enabled: true`. The
+   server refuses to start if those mismatch — fail-loud over fail-silent.
+   Optional `agency_environment_allowed` further restricts confirmed
+   writes to listed environments (e.g. `["TEST"]`).
+3. **Append-only audit log.** When `writes.audit_log_path` is set,
+   every confirmed write writes one JSON line containing tool, method,
+   path, agency, environment, scrubbed params, response status, and
+   `traceId`. Survives `logging.format=console`. Mode 0600 on Unix.
+
+Payments add a fourth gate: even with writes enabled,
+`accela_commit_payment` refuses to call `/commit` unless
+`payments.real_money_allowed: true`. Against PROD-like environments
+you also need `payments.i_understand_this_spends_real_money: true` —
+intentional friction.
+
+For sensitive updates, `accela_update_record` accepts an
+`expected_status` precondition. The tool reads the current record before
+writing and refuses the update if status changed since the LLM last
+looked. Stops "I confidently updated the wrong record" outcomes.
+
+Example dry-run preview return shape:
+
+```json
+{
+  "preview": true,
+  "confirmation_required": true,
+  "tool": "accela_update_workflow_task",
+  "method": "PUT",
+  "path": "/v4/records/ISLANDTON-1-2-3/workflowTasks",
+  "summary": "Update workflow task '42' on record 'ISLANDTON-1-2-3' → status 'Approved'",
+  "body": [{ "id": "42", "status": { "value": "Approved" } }],
+  "irreversible": false,
+  "affects_money": false,
+  "next_step": "Show this preview to the human user. If they approve, re-invoke 'accela_update_workflow_task' with the same arguments and `confirm=True` to actually execute."
+}
+```
 
 ## Operational behavior
 
@@ -312,12 +365,15 @@ uv run pytest tests/unit --cov=accela_mcp --cov-report=term-missing
 ACCELA_INTEGRATION_TEST=1 uv run pytest tests/integration -v
 ```
 
-## Limitations (v0.1.1)
+## Limitations (v0.2.0)
 
 - Single-agency, single-environment per running server.
-- Read-only tools shipped by default; write capabilities are v0.2 work.
-- Document upload via legacy `/v4/documents` only; ACDS chunked upload
-  is deferred.
+- Read-only by default. Write groups must be explicitly enabled AND
+  `writes.enabled: true` set in `capabilities.yaml`. Even then, every
+  write tool is dry-run unless called with `confirm=true`.
+- Document upload uses the legacy single-shot
+  `POST /v4/records/{id}/documents` endpoint with a 20 MB inline cap.
+  The newer ACDS chunked upload service is deferred.
 - No webhook support — Accela does not expose a native webhook API
   (EMSE is agency-side and not in scope).
 

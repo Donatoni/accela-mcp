@@ -18,6 +18,7 @@ from accela_mcp.auth.refresher import RefreshTokenExpiredError, introspect, refr
 from accela_mcp.auth.token_store import TokenStore
 from accela_mcp.capabilities import LoadedConfig, group_meta, load_capabilities
 from accela_mcp.observability.logging_config import configure_logging, get_logger
+from accela_mcp.safety import AuditLog
 from accela_mcp.settings import Settings, get_settings
 from accela_mcp.tools._base import ToolContext
 from accela_mcp.utils.cache import TTLCache
@@ -83,11 +84,24 @@ async def build_context(settings: Settings, config: LoadedConfig) -> ToolContext
         ttl_seconds=max(1, config.capabilities.cache.reference_data_ttl_seconds)
     )
 
+    audit = AuditLog(config.capabilities.writes.audit_log_path)
+    if config.capabilities.writes.enabled:
+        log.info(
+            "writes_enabled",
+            audit_log_path=str(config.capabilities.writes.audit_log_path)
+            if config.capabilities.writes.audit_log_path
+            else None,
+            agency_environment_allowed=config.capabilities.writes.agency_environment_allowed
+            or "any",
+            real_money_allowed=config.capabilities.payments.real_money_allowed,
+        )
+
     return ToolContext(
         settings=settings,
         config=config,
         client=client,
         reference_cache=cache,
+        audit_log=audit,
     )
 
 

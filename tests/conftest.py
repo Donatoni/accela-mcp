@@ -18,8 +18,11 @@ from accela_mcp.auth.token_store import REFRESH_TOKEN_LIFETIME, Tokens, TokenSto
 from accela_mcp.capabilities import (
     Capabilities,
     LoadedConfig,
+    PaymentsConfig,
+    WritesConfig,
     scopes_for,
 )
+from accela_mcp.safety import AuditLog
 from accela_mcp.settings import Settings
 from accela_mcp.tools._base import ToolContext
 from accela_mcp.utils.cache import TTLCache
@@ -188,6 +191,59 @@ async def tool_context(
         config=loaded_config,
         client=client,
         reference_cache=cache,
+    )
+
+
+@pytest.fixture
+def writes_enabled_config(tmp_path: Path) -> LoadedConfig:
+    """A LoadedConfig with writes.enabled and every write group on."""
+    enabled = {
+        "discovery",
+        "records_read",
+        "records_write",
+        "inspections_read",
+        "inspections_write",
+        "documents_read",
+        "documents_write",
+        "workflow_read",
+        "workflow_write",
+        "fees_read",
+        "payments_read",
+        "payments_write",
+        "reference_data",
+        "search",
+    }
+    caps = Capabilities(
+        version=1,
+        agency="NULLISLAND",
+        environment="TEST",
+        enabled_groups=sorted(enabled),
+        writes=WritesConfig(enabled=True),
+        payments=PaymentsConfig(real_money_allowed=True),
+    )
+    return LoadedConfig(
+        capabilities=caps,
+        enabled_groups=enabled,
+        scopes=scopes_for(enabled),
+    )
+
+
+@pytest_asyncio.fixture
+async def write_tool_context(
+    settings: Settings,
+    writes_enabled_config: LoadedConfig,
+    client: AccelaClient,
+    tmp_path: Path,
+) -> AsyncIterator[ToolContext]:
+    """A ToolContext with writes enabled and a real audit log."""
+    cache: TTLCache[dict[str, Any]] = TTLCache(ttl_seconds=60)
+    audit = AuditLog(tmp_path / "audit.log")
+    yield ToolContext(
+        settings=settings,
+        config=writes_enabled_config,
+        client=client,
+        reference_cache=cache,
+        audit_log=audit,
     )
 
 
