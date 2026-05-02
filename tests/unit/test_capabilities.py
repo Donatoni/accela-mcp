@@ -8,7 +8,9 @@ from accela_mcp.capabilities import (
     CapabilityConfigError,
     all_group_ids,
     always_on_groups,
+    apply_env_overrides,
     default_groups,
+    env_group_var,
     get_tools_by_group_for,
     group_meta,
     load_capabilities,
@@ -118,3 +120,101 @@ class TestGetToolsByGroupFor:
     def test_unknown_groups_filtered_out(self) -> None:
         out = get_tools_by_group_for({"discovery", "made_up"})
         assert "made_up" not in out
+
+
+class TestApplyEnvOverrides:
+    def _baseline(self, tmp_path: Path):
+        cfg = tmp_path / "capabilities.yaml"
+        cfg.write_text("version: 1\nagency: NULLISLAND\nenvironment: TEST\n")
+        return load_capabilities(cfg)
+
+    def test_no_env_returns_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Nothing in env → output equals input.
+        for var in ["ACCELA_AGENCY", "ACCELA_ENVIRONMENT", "ACCELA_WRITES_ENABLED"]:
+            monkeypatch.delenv(var, raising=False)
+        for gid in all_group_ids():
+            monkeypatch.delenv(env_group_var(gid), raising=False)
+
+        baseline = self._baseline(tmp_path)
+        out = apply_env_overrides(baseline)
+        assert out.capabilities.agency == "NULLISLAND"
+        assert out.enabled_groups == baseline.enabled_groups
+
+    def test_agency_and_environment_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ACCELA_AGENCY", "DELAND")
+        monkeypatch.setenv("ACCELA_ENVIRONMENT", "PROD")
+
+        out = apply_env_overrides(self._baseline(tmp_path))
+        assert out.capabilities.agency == "DELAND"
+        assert out.capabilities.environment == "PROD"
+
+    def test_blank_env_does_not_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # MCPB hosts often pass empty strings for fields the user left blank.
+        monkeypatch.setenv("ACCELA_AGENCY", "")
+        monkeypatch.setenv("ACCELA_ENVIRONMENT", "  ")
+        monkeypatch.setenv("ACCELA_GROUP_REPORTS", "")
+
+        out = apply_env_overrides(self._baseline(tmp_path))
+        assert out.capabilities.agency == "NULLISLAND"
+        assert "reports" not in out.enabled_groups  # not flipped on by ""
+
+    def test_group_toggle_on(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ACCELA_GROUP_REPORTS", "true")
+
+        out = apply_env_overrides(self._baseline(tmp_path))
+        assert "reports" in out.enabled_groups
+
+    def test_group_toggle_off(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ACCELA_GROUP_RECORDS_READ", "false")
+
+        out = apply_env_overrides(self._baseline(tmp_path))
+        assert "records_read" not in out.enabled_groups
+
+    def test_writes_enabled_with_write_group(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ACCELA_GROUP_RECORDS_WRITE", "true")
+        monkeypatch.setenv("ACCELA_WRITES_ENABLED", "true")
+
+        out = apply_env_overrides(self._baseline(tmp_path))
+        assert "records_write" in out.enabled_groups
+        assert out.capabilities.writes.enabled is True
+
+    def test_write_group_without_writes_enabled_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The kill-switch validator must fire on the env-overridden config.
+        monkeypatch.setenv("ACCELA_GROUP_RECORDS_WRITE", "true")
+        # Don't set ACCELA_WRITES_ENABLED.
+
+        with pytest.raises(CapabilityConfigError):
+            apply_env_overrides(self._baseline(tmp_path))
+
+    def test_payments_real_money_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ACCELA_PAYMENTS_REAL_MONEY_ALLOWED", "true")
+
+        out = apply_env_overrides(self._baseline(tmp_path))
+        assert out.capabilities.payments.real_money_allowed is True
+
+    def test_unknown_value_is_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Garbage values shouldn't accidentally enable groups.
+        monkeypatch.setenv("ACCELA_GROUP_REPORTS", "maybe")
+
+        out = apply_env_overrides(self._baseline(tmp_path))
+        assert "reports" not in out.enabled_groups
+
+
+class TestEnvGroupVarHelper:
+    def test_format(self) -> None:
+        assert env_group_var("records_read") == "ACCELA_GROUP_RECORDS_READ"
+        assert env_group_var("admin_escape_hatch") == "ACCELA_GROUP_ADMIN_ESCAPE_HATCH"

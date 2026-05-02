@@ -2,9 +2,9 @@
   "manifest_version": "0.4",
   "name": "accela-mcp",
   "display_name": "Accela MCP",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "MCP server for the Accela Construct API — search records, inspections, fees, documents, and more.",
-  "long_description": "Connects Claude Desktop to your Accela tenant. Search permits, look up parcels and contacts, list inspections, read fees and documents — all from chat.\n\n## After installing\n\n1. **Get your Accela app credentials.** On the [Accela Developer Portal](https://developer.accela.com), create an app and copy its App ID and App Secret. Use the redirect URI `http://localhost:8765/oauth/callback` (or pick your own and configure it on both sides).\n2. **Fill in the Configuration tab below.** App ID, App Secret, and Redirect URI are required. Leave **Encryption Key** blank — the server generates one on first run and persists it locally.\n3. **Log in from chat.** Once installed, ask Claude:  *“Log me into Accela.”* Claude will call the `accela_login` tool, open your browser to Accela's authorize page, capture the redirect, and save tokens.\n4. **Restart Claude Desktop** so the rest of the Accela tools (records, inspections, fees, etc.) become visible.\n\n## In-chat tools that don't need login\n\n- `accela_auth_status` — check whether you're logged in and when your token expires.\n- `accela_login` — start (or repeat) the OAuth login.\n\nIf an Accela API call later returns 401, the response includes a hint pointing back at `accela_login`.",
+  "long_description": "Connects Claude Desktop to your Accela tenant. Search permits, look up parcels and contacts, list inspections, read fees and documents — all from chat.\n\n## After installing\n\n1. **Get your Accela app credentials.** On the [Accela Developer Portal](https://developer.accela.com), create an app and copy its App ID and App Secret. Use the redirect URI `http://localhost:8765/oauth/callback` (or pick your own and configure it on both sides).\n2. **Fill in the Configuration tab below.** App ID, App Secret, Agency, Environment, and Redirect URI are required. Leave **Encryption Key** blank — the server generates one on first run and persists it locally.\n3. **Pick which Accela features to expose.** The toggles below map to capability groups. Read-only groups are on by default; write groups require flipping **Allow Write Tools** as a master safety switch.\n4. **Log in from chat.** Once installed, ask Claude:  *“Log me into Accela.”* Claude will call the `accela_login` tool, open your browser to Accela's authorize page, capture the redirect, and save tokens.\n5. **Restart Claude Desktop** so the rest of the Accela tools become visible.\n\n## In-chat tools that don't need login\n\n- `accela_auth_status` — check whether you're logged in and when your token expires.\n- `accela_login` — start (or repeat) the OAuth login.\n\nIf an Accela API call later returns 401, the response includes a hint pointing back at `accela_login`.",
   "author": {
     "name": "Accela MCP Maintainers",
     "url": "https://github.com/Donatoni/accela-mcp"
@@ -35,7 +35,29 @@
         "ACCELA_APP_ID": "${user_config.app_id}",
         "ACCELA_APP_SECRET": "${user_config.app_secret}",
         "ACCELA_REDIRECT_URI": "${user_config.redirect_uri}",
-        "ACCELA_MCP_KEY": "${user_config.mcp_key}"
+        "ACCELA_MCP_KEY": "${user_config.mcp_key}",
+        "ACCELA_AGENCY": "${user_config.agency}",
+        "ACCELA_ENVIRONMENT": "${user_config.environment}",
+        "ACCELA_GROUP_RECORDS_READ": "${user_config.group_records_read}",
+        "ACCELA_GROUP_RECORDS_WRITE": "${user_config.group_records_write}",
+        "ACCELA_GROUP_INSPECTIONS_READ": "${user_config.group_inspections_read}",
+        "ACCELA_GROUP_INSPECTIONS_WRITE": "${user_config.group_inspections_write}",
+        "ACCELA_GROUP_DOCUMENTS_READ": "${user_config.group_documents_read}",
+        "ACCELA_GROUP_DOCUMENTS_WRITE": "${user_config.group_documents_write}",
+        "ACCELA_GROUP_PROPERTY_READ": "${user_config.group_property_read}",
+        "ACCELA_GROUP_PEOPLE_READ": "${user_config.group_people_read}",
+        "ACCELA_GROUP_WORKFLOW_READ": "${user_config.group_workflow_read}",
+        "ACCELA_GROUP_WORKFLOW_WRITE": "${user_config.group_workflow_write}",
+        "ACCELA_GROUP_FEES_READ": "${user_config.group_fees_read}",
+        "ACCELA_GROUP_PAYMENTS_READ": "${user_config.group_payments_read}",
+        "ACCELA_GROUP_PAYMENTS_WRITE": "${user_config.group_payments_write}",
+        "ACCELA_GROUP_REFERENCE_DATA": "${user_config.group_reference_data}",
+        "ACCELA_GROUP_GIS": "${user_config.group_gis}",
+        "ACCELA_GROUP_SEARCH": "${user_config.group_search}",
+        "ACCELA_GROUP_REPORTS": "${user_config.group_reports}",
+        "ACCELA_GROUP_ADMIN_ESCAPE_HATCH": "${user_config.group_admin_escape_hatch}",
+        "ACCELA_WRITES_ENABLED": "${user_config.writes_enabled}",
+        "ACCELA_PAYMENTS_REAL_MONEY_ALLOWED": "${user_config.payments_real_money_allowed}"
       }
     }
   },
@@ -61,6 +83,21 @@
       "sensitive": true,
       "required": true
     },
+    "agency": {
+      "type": "string",
+      "title": "Agency",
+      "description": "Your Accela agency name, e.g. NULLISLAND for the public sandbox or your jurisdiction's identifier for production.",
+      "sensitive": false,
+      "required": true
+    },
+    "environment": {
+      "type": "string",
+      "title": "Environment",
+      "description": "Tenant environment, typically TEST, STAGE, or PROD. Match what's registered on the Developer Portal.",
+      "sensitive": false,
+      "required": true,
+      "default": "TEST"
+    },
     "redirect_uri": {
       "type": "string",
       "title": "OAuth Redirect URI",
@@ -76,6 +113,126 @@
       "sensitive": true,
       "required": false,
       "default": ""
+    },
+    "group_records_read": {
+      "type": "boolean",
+      "title": "Records — Read",
+      "description": "Search records, get record details, read custom data.",
+      "default": true
+    },
+    "group_records_write": {
+      "type": "boolean",
+      "title": "Records — Write",
+      "description": "Create, finalize, and update records. Requires Allow Write Tools.",
+      "default": false
+    },
+    "group_inspections_read": {
+      "type": "boolean",
+      "title": "Inspections — Read",
+      "description": "Inspections, history, checklists.",
+      "default": true
+    },
+    "group_inspections_write": {
+      "type": "boolean",
+      "title": "Inspections — Write",
+      "description": "Schedule, reschedule, cancel, result, and assign inspections. Requires Allow Write Tools.",
+      "default": false
+    },
+    "group_documents_read": {
+      "type": "boolean",
+      "title": "Documents — Read",
+      "description": "List record documents and download content.",
+      "default": true
+    },
+    "group_documents_write": {
+      "type": "boolean",
+      "title": "Documents — Write",
+      "description": "Upload documents to a record. Requires Allow Write Tools.",
+      "default": false
+    },
+    "group_property_read": {
+      "type": "boolean",
+      "title": "Property — Read",
+      "description": "Address, parcel, and owner lookups.",
+      "default": true
+    },
+    "group_people_read": {
+      "type": "boolean",
+      "title": "People — Read",
+      "description": "Contacts and licensed professionals.",
+      "default": true
+    },
+    "group_workflow_read": {
+      "type": "boolean",
+      "title": "Workflow — Read",
+      "description": "Workflow tasks and history for a record.",
+      "default": true
+    },
+    "group_workflow_write": {
+      "type": "boolean",
+      "title": "Workflow — Write",
+      "description": "Advance and update workflow tasks. Requires Allow Write Tools.",
+      "default": false
+    },
+    "group_fees_read": {
+      "type": "boolean",
+      "title": "Fees — Read",
+      "description": "Fees, fee estimates, and invoices.",
+      "default": true
+    },
+    "group_payments_read": {
+      "type": "boolean",
+      "title": "Payments — Read",
+      "description": "Read payments on a record.",
+      "default": false
+    },
+    "group_payments_write": {
+      "type": "boolean",
+      "title": "Payments — Write",
+      "description": "Initiate and commit citizen payments. Requires Allow Write Tools AND Allow Real-Money Payments.",
+      "default": false
+    },
+    "group_reference_data": {
+      "type": "boolean",
+      "title": "Reference Data",
+      "description": "Lookup tables: types, statuses, departments, fees.",
+      "default": true
+    },
+    "group_gis": {
+      "type": "boolean",
+      "title": "GIS",
+      "description": "Geocoding and reverse-geocoding helpers.",
+      "default": false
+    },
+    "group_search": {
+      "type": "boolean",
+      "title": "Global Search",
+      "description": "Cross-entity free-text search.",
+      "default": true
+    },
+    "group_reports": {
+      "type": "boolean",
+      "title": "Reports",
+      "description": "List and run agency-defined reports.",
+      "default": false
+    },
+    "group_admin_escape_hatch": {
+      "type": "boolean",
+      "title": "Admin Escape Hatch",
+      "description": "Exposes accela_raw_request — only useful when the YAML defines a path/method allowlist. Off by default.",
+      "default": false
+    },
+    "writes_enabled": {
+      "type": "boolean",
+      "title": "Allow Write Tools",
+      "description": "Master switch. Even with individual write groups toggled on, no write call mutates Accela data unless this is enabled. Off by default.",
+      "default": false
+    },
+    "payments_real_money_allowed": {
+      "type": "boolean",
+      "title": "Allow Real-Money Payments",
+      "description": "Extra gate on top of Allow Write Tools for the Payments — Write group. Production environments require an additional flag in capabilities.yaml. Off by default.",
+      "default": false
     }
   }
 }

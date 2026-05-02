@@ -138,10 +138,41 @@ async def test_login_creates_capabilities_yaml_when_missing(
 
 
 @pytest.mark.asyncio
-async def test_login_requires_agency_when_no_config(settings: Settings) -> None:
+async def test_login_requires_agency_when_no_config(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ACCELA_AGENCY", raising=False)
+    monkeypatch.delenv("ACCELA_ENVIRONMENT", raising=False)
     mcp = _register_auth(settings, config=None)
     out = await call(mcp, "accela_login")(open_browser=False)
     assert out["error"] == "agency_missing"
+
+
+@pytest.mark.asyncio
+async def test_login_falls_back_to_env_agency(
+    settings: Settings,
+    fresh_tokens: Tokens,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """In bootstrap mode (no config), accela_login should pick up the
+    Agency / Environment that the MCPB UI passed via env vars rather than
+    forcing the user to repeat them in chat."""
+    monkeypatch.setenv("ACCELA_AGENCY", "NULLISLAND")
+    monkeypatch.setenv("ACCELA_ENVIRONMENT", "TEST")
+
+    captured: dict[str, str] = {}
+
+    async def fake_flow(s, *, agency, environment, scopes, open_browser):
+        captured["agency"] = agency
+        captured["environment"] = environment
+        return fresh_tokens
+
+    mcp = _register_auth(settings, config=None)
+    with patch("accela_mcp.tools.auth.run_authorization_code_flow", new=fake_flow):
+        out = await call(mcp, "accela_login")(open_browser=False)
+
+    assert out["authenticated"] is True
+    assert captured == {"agency": "NULLISLAND", "environment": "TEST"}
 
 
 @pytest.mark.asyncio

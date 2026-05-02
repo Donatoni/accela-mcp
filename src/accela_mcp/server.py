@@ -25,6 +25,7 @@ from accela_mcp.auth.token_store import TokenStore
 from accela_mcp.capabilities import (
     CapabilityConfigError,
     LoadedConfig,
+    apply_env_overrides,
     group_meta,
     load_capabilities,
 )
@@ -190,6 +191,13 @@ async def serve_async(
             config_load_error = CapabilityConfigError(
                 f"capabilities config not found at {settings.config_path}"
             )
+
+    # MCPB extensions expose capability toggles, agency, env, and write/
+    # payment master switches as user_config env vars. Layer them on top of
+    # the YAML so the host UI is authoritative. CLI users (no env vars set)
+    # see no change.
+    if config is not None:
+        config = apply_env_overrides(config)
 
     log_level = config.capabilities.logging.level if config else "INFO"
     log_format = config.capabilities.logging.format if config else "json"

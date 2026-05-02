@@ -12,6 +12,7 @@ for `accela_login`, drive the OAuth flow against the IdP.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -144,9 +145,21 @@ def register(mcp: FastMCP, ctx: AuthContext) -> None:
                 ),
             }
 
-        resolved_agency = agency or (ctx.config.capabilities.agency if ctx.config else None)
-        resolved_environment = environment or (
-            ctx.config.capabilities.environment if ctx.config else None
+        # Resolution order: explicit arg > validated config > MCPB env var.
+        # The env-var fallback covers bootstrap mode (no capabilities.yaml
+        # yet) where the user filled in Agency / Environment via the host
+        # extension UI and shouldn't have to repeat them in chat.
+        resolved_agency = (
+            agency
+            or (ctx.config.capabilities.agency if ctx.config else None)
+            or (os.environ.get("ACCELA_AGENCY") or "").strip()
+            or None
+        )
+        resolved_environment = (
+            environment
+            or (ctx.config.capabilities.environment if ctx.config else None)
+            or (os.environ.get("ACCELA_ENVIRONMENT") or "").strip()
+            or None
         )
         if not resolved_agency or not resolved_environment:
             return {

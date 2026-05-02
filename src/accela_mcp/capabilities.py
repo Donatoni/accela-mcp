@@ -11,6 +11,7 @@ The YAML loader produces a `LoadedConfig` that the server consumes at start.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -501,6 +502,114 @@ def get_tools_by_group_for(enabled: set[str]) -> dict[str, list[str]]:
     return {g: catalog.get(g, []) for g in sorted(enabled) if g in catalog}
 
 
+_TRUE_STRINGS = frozenset({"true", "1", "yes", "on"})
+_FALSE_STRINGS = frozenset({"false", "0", "no", "off", ""})
+
+
+def _parse_bool_env(value: str | None) -> bool | None:
+    """Parse an env-var value as a boolean, or None if unset/blank.
+
+    Empty string is treated as "unset" — host extensions sometimes pass
+    empty strings for unchecked boolean toggles.
+    """
+    if value is None:
+        return None
+    v = value.strip().lower()
+    if v == "":
+        return None
+    if v in _TRUE_STRINGS:
+        return True
+    if v in _FALSE_STRINGS:
+        return False
+    # Unknown value — treat as None so we don't accidentally enable / disable.
+    return None
+
+
+def env_group_var(group_id: str) -> str:
+    """Env-var name for the per-group enable toggle exposed by the MCPB UI.
+
+    Example: ``records_write`` → ``ACCELA_GROUP_RECORDS_WRITE``.
+    """
+    return f"ACCELA_GROUP_{group_id.upper()}"
+
+
+def apply_env_overrides(loaded: LoadedConfig) -> LoadedConfig:
+    """Layer env-var overrides on top of a loaded capabilities config.
+
+    The MCPB extension UI exposes capability toggles, agency, and the
+    write/payment master switches as user_config fields, which the host
+    passes to the subprocess as environment variables. This function makes
+    those env vars authoritative — if set, they override whatever was in
+    ``capabilities.yaml``; if unset, the YAML wins. CLI users (who don't
+    pass these env vars) see no change.
+
+    Recognised env vars:
+
+    * ``ACCELA_AGENCY`` — overrides ``capabilities.agency``
+    * ``ACCELA_ENVIRONMENT`` — overrides ``capabilities.environment``
+    * ``ACCELA_GROUP_<NAME>`` (boolean) — enable / disable a capability
+      group. ``NAME`` is the group ID upper-cased
+      (``ACCELA_GROUP_RECORDS_WRITE``, ``ACCELA_GROUP_REPORTS``, ...).
+    * ``ACCELA_WRITES_ENABLED`` (boolean) — overrides ``writes.enabled``.
+    * ``ACCELA_PAYMENTS_REAL_MONEY_ALLOWED`` (boolean) — overrides
+      ``payments.real_money_allowed``. Note: in production environments
+      this still requires
+      ``payments.i_understand_this_spends_real_money: true`` in the YAML
+      (intentional friction; not exposed via env).
+    """
+    raw = loaded.capabilities.model_dump()
+
+    if agency := os.environ.get("ACCELA_AGENCY", "").strip():
+        raw["agency"] = agency
+    if environment := os.environ.get("ACCELA_ENVIRONMENT", "").strip():
+        raw["environment"] = environment
+
+    # Per-group overrides. Start from the YAML's `enabled_groups`; each
+    # `ACCELA_GROUP_<NAME>` env var that's set toggles that group on/off.
+    base_groups = (
+        set(raw.get("enabled_groups") or [])
+        if raw.get("enabled_groups") is not None
+        else set(default_groups())
+    )
+    touched = False
+    for group_id in all_group_ids():
+        decision = _parse_bool_env(os.environ.get(env_group_var(group_id)))
+        if decision is None:
+            continue
+        touched = True
+        if decision:
+            base_groups.add(group_id)
+        else:
+            base_groups.discard(group_id)
+    if touched:
+        raw["enabled_groups"] = sorted(base_groups)
+
+    if (decision := _parse_bool_env(os.environ.get("ACCELA_WRITES_ENABLED"))) is not None:
+        raw.setdefault("writes", {})["enabled"] = decision
+
+    if (
+        decision := _parse_bool_env(os.environ.get("ACCELA_PAYMENTS_REAL_MONEY_ALLOWED"))
+    ) is not None:
+        raw.setdefault("payments", {})["real_money_allowed"] = decision
+
+    # Re-validate so cross-field rules (writes kill-switch, admin allowlist,
+    # payments friction) re-fire on the merged document. Wrap the pydantic
+    # error in CapabilityConfigError to keep the surface consistent.
+    try:
+        new_caps = Capabilities.model_validate(raw)
+    except ValidationError as e:
+        raise CapabilityConfigError(
+            "capabilities config invalid after env-var overrides:\n" + str(e)
+        ) from e
+
+    enabled = new_caps.resolved_groups()
+    return LoadedConfig(
+        capabilities=new_caps,
+        enabled_groups=enabled,
+        scopes=scopes_for(enabled),
+    )
+
+
 def default_capabilities_yaml(agency: str, environment: str) -> str:
     """A safe default capabilities.yaml for first-run auto-creation.
 
@@ -542,8 +651,10 @@ __all__ = [
     "RateLimitConfig",
     "WritesConfig",
     "all_group_ids",
+    "apply_env_overrides",
     "default_capabilities_yaml",
     "default_groups",
+    "env_group_var",
     "get_tools_by_group_for",
     "group_meta",
     "load_capabilities",
