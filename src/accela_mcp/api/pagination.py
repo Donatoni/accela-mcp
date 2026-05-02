@@ -1,14 +1,21 @@
 """Helpers for offset/limit pagination loops.
 
-Tools default to **NOT** auto-paginating — they expose `limit`/`offset` and
-let the LLM iterate. Use `paginate_all` only when a tool semantically wants
-all results (e.g., listing every document on a record, where the LLM should
-not have to count pages itself).
+Two helpers are exposed:
+
+* `paginate_all` — async iterator over every item across pages of a GET
+  endpoint. Use when a tool semantically wants every result (e.g., listing
+  every document on a record).
+* `auto_paginate_collect` — collects pages from a fetcher callable up to a
+  `max_results` soft cap and returns a structured result with continuation
+  info. Use for search tools where the LLM should auto-paginate up to a
+  cap and then surface a continuation cursor for the user to confirm
+  before going further.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from accela_mcp.api.client import AccelaClient
@@ -56,8 +63,68 @@ async def paginate_all(
         offset += limit
 
 
+@dataclass(frozen=True)
+class AutoPaginateResult:
+    """Structured result for `auto_paginate_collect`.
+
+    `continuation` is non-None only when the cap was hit while more results
+    were still available — the LLM should surface this to the user and ask
+    whether to continue.
+    """
+
+    items: list[dict[str, Any]]
+    last_page: dict[str, Any]
+    continuation: dict[str, Any] | None
+
+
+async def auto_paginate_collect(
+    fetch_page: Callable[[int, int], Awaitable[dict[str, Any]]],
+    *,
+    page_size: int = SEARCH_MAX_PAGE,
+    max_results: int = DEFAULT_AUTO_PAGINATE_HARD_CAP,
+    start_offset: int = 0,
+) -> AutoPaginateResult:
+    """Loop `fetch_page(offset, limit)` until exhausted or `max_results`.
+
+    Each call to `fetch_page` must return a parsed Accela response with
+    `result` (list) and `page` (envelope with `hasmore`). The helper:
+
+    * walks pages of `page_size`, advancing offset by the requested limit
+    * stops when `page.hasmore` is false, the page is empty, or we've
+      collected `max_results` items
+    * returns a continuation cursor if we stopped at the cap with
+      more results still available
+    """
+    items: list[dict[str, Any]] = []
+    last_page: dict[str, Any] = {}
+    offset = start_offset
+
+    while len(items) < max_results:
+        remaining = max_results - len(items)
+        limit = min(page_size, remaining)
+        response = await fetch_page(offset, limit)
+        page_items = response.get("result") or []
+        last_page = response.get("page") or {}
+        # Trim defensively in case the API returns more than requested
+        # (rare, but keeps `max_results` an honest cap).
+        items.extend(page_items[:remaining])
+        if not last_page.get("hasmore") or not page_items:
+            return AutoPaginateResult(items=items, last_page=last_page, continuation=None)
+        offset += limit
+
+    if last_page.get("hasmore"):
+        return AutoPaginateResult(
+            items=items,
+            last_page=last_page,
+            continuation={"next_offset": offset, "max_results_cap": max_results},
+        )
+    return AutoPaginateResult(items=items, last_page=last_page, continuation=None)
+
+
 __all__ = [
     "DEFAULT_AUTO_PAGINATE_HARD_CAP",
     "SEARCH_MAX_PAGE",
+    "AutoPaginateResult",
+    "auto_paginate_collect",
     "paginate_all",
 ]

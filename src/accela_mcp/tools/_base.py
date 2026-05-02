@@ -31,6 +31,11 @@ log = get_logger(__name__)
 # search max is 100; any tool exposes `limit` clamped to this.
 TOOL_LIMIT_MAX = 100
 
+# Absolute ceiling on auto-pagination `max_results`. The default is 1000;
+# this ceiling protects against a runaway request that would page through
+# tens of thousands of records in one tool call.
+TOOL_MAX_RESULTS_CEILING = 5000
+
 
 @dataclass
 class ToolContext:
@@ -136,6 +141,19 @@ def clamp_offset(offset: int | None) -> int:
     return offset
 
 
+def clamp_max_results(max_results: int | None, default: int = 1000) -> int:
+    """Clamp a user-supplied `max_results` to a safe range."""
+    if max_results is None:
+        return default
+    if not isinstance(max_results, int):
+        raise ValueError(
+            f"max_results must be an integer, got {type(max_results).__name__}"
+        )
+    if max_results < 1:
+        raise ValueError("max_results must be >= 1")
+    return min(max_results, TOOL_MAX_RESULTS_CEILING)
+
+
 def first_result(payload: dict[str, Any]) -> Any:
     """Extract the first item from a `result` array, or the result if it's a dict.
 
@@ -165,8 +183,10 @@ def normalize_yn(value: Any) -> bool | None:
 
 __all__ = [
     "TOOL_LIMIT_MAX",
+    "TOOL_MAX_RESULTS_CEILING",
     "ToolContext",
     "clamp_limit",
+    "clamp_max_results",
     "clamp_offset",
     "first_result",
     "normalize_yn",

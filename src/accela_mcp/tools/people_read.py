@@ -6,9 +6,11 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from accela_mcp.api.pagination import SEARCH_MAX_PAGE, auto_paginate_collect
 from accela_mcp.tools._base import (
     ToolContext,
     clamp_limit,
+    clamp_max_results,
     clamp_offset,
     tool_call,
 )
@@ -33,10 +35,15 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         contact_type: str | None = None,
         limit: int = 25,
         offset: int = 0,
+        auto_paginate: bool = True,
+        max_results: int = 1000,
     ) -> dict[str, Any]:
         """Searches contacts by name, email, phone, or contact type. At least
-        one search field is required. Returns a paginated list of contact
-        summaries."""
+        one search field is required. By default auto-paginates up to
+        `max_results` (default 1000); when the cap is hit and more results
+        exist, the response includes a `continuation` cursor — surface that
+        and ask the user before paginating further. Set
+        `auto_paginate=False` to fetch a single page."""
         if not any([name, email, phone, contact_type]):
             raise ValueError("Provide at least one of name, email, phone, contact_type")
         body: dict[str, Any] = {
@@ -46,14 +53,49 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "type": {"value": contact_type} if contact_type else None,
         }
         body = {k: v for k, v in body.items() if v is not None}
-        result = await ctx.client.post(
+        start_offset = clamp_offset(offset)
+
+        if auto_paginate:
+            cap = clamp_max_results(max_results)
+
+            async def fetch(off: int, lim: int) -> dict[str, Any]:
+                return await ctx.client.post(
+                    "/v4/search/contacts",
+                    params={"offset": off, "limit": lim},
+                    json=body,
+                )
+
+            result = await auto_paginate_collect(
+                fetch,
+                page_size=SEARCH_MAX_PAGE,
+                max_results=cap,
+                start_offset=start_offset,
+            )
+            warnings: list[str] = []
+            if result.continuation:
+                warnings.append(
+                    f"Returned {len(result.items)} contacts and more are available. "
+                    f"Ask the user whether to continue; if yes, call again with "
+                    f"offset={result.continuation['next_offset']} or raise "
+                    f"max_results."
+                )
+            return {
+                "contacts": result.items,
+                "page": result.last_page,
+                "warnings": warnings or None,
+                "continuation": result.continuation,
+            }
+
+        single = await ctx.client.post(
             "/v4/search/contacts",
-            params={"limit": clamp_limit(limit), "offset": clamp_offset(offset)},
+            params={"limit": clamp_limit(limit), "offset": start_offset},
             json=body,
         )
         return {
-            "contacts": result.get("result") or [],
-            "page": result.get("page") or {},
+            "contacts": single.get("result") or [],
+            "page": single.get("page") or {},
+            "warnings": None,
+            "continuation": None,
         }
 
     @mcp.tool()
@@ -73,9 +115,15 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         license_type: str | None = None,
         limit: int = 25,
         offset: int = 0,
+        auto_paginate: bool = True,
+        max_results: int = 1000,
     ) -> dict[str, Any]:
         """Searches licensed professionals by name, license number, or license
-        type. At least one search field is required."""
+        type. At least one search field is required. By default auto-paginates
+        up to `max_results` (default 1000); when the cap is hit and more
+        results exist, the response includes a `continuation` cursor —
+        surface that and ask the user before paginating further. Set
+        `auto_paginate=False` to fetch a single page."""
         if not any([name, license_number, license_type]):
             raise ValueError("Provide at least one of name, license_number, license_type")
         body: dict[str, Any] = {
@@ -84,12 +132,47 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "licenseType": license_type,
         }
         body = {k: v for k, v in body.items() if v is not None}
-        result = await ctx.client.post(
+        start_offset = clamp_offset(offset)
+
+        if auto_paginate:
+            cap = clamp_max_results(max_results)
+
+            async def fetch(off: int, lim: int) -> dict[str, Any]:
+                return await ctx.client.post(
+                    "/v4/search/professionals",
+                    params={"offset": off, "limit": lim},
+                    json=body,
+                )
+
+            result = await auto_paginate_collect(
+                fetch,
+                page_size=SEARCH_MAX_PAGE,
+                max_results=cap,
+                start_offset=start_offset,
+            )
+            warnings: list[str] = []
+            if result.continuation:
+                warnings.append(
+                    f"Returned {len(result.items)} professionals and more are available. "
+                    f"Ask the user whether to continue; if yes, call again with "
+                    f"offset={result.continuation['next_offset']} or raise "
+                    f"max_results."
+                )
+            return {
+                "professionals": result.items,
+                "page": result.last_page,
+                "warnings": warnings or None,
+                "continuation": result.continuation,
+            }
+
+        single = await ctx.client.post(
             "/v4/search/professionals",
-            params={"limit": clamp_limit(limit), "offset": clamp_offset(offset)},
+            params={"limit": clamp_limit(limit), "offset": start_offset},
             json=body,
         )
         return {
-            "professionals": result.get("result") or [],
-            "page": result.get("page") or {},
+            "professionals": single.get("result") or [],
+            "page": single.get("page") or {},
+            "warnings": None,
+            "continuation": None,
         }

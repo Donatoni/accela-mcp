@@ -5,7 +5,9 @@ import pytest
 from accela_mcp.api.errors import AccelaAPIError
 from accela_mcp.tools._base import (
     TOOL_LIMIT_MAX,
+    TOOL_MAX_RESULTS_CEILING,
     clamp_limit,
+    clamp_max_results,
     clamp_offset,
     first_result,
     normalize_yn,
@@ -34,6 +36,29 @@ class TestClampLimit:
     def test_non_int_rejected(self) -> None:
         with pytest.raises(ValueError):
             clamp_limit("25")  # type: ignore[arg-type]
+
+
+class TestClampMaxResults:
+    def test_default_when_none(self) -> None:
+        assert clamp_max_results(None) == 1000
+
+    def test_pass_through(self) -> None:
+        assert clamp_max_results(2500) == 2500
+
+    def test_clamped_to_ceiling(self) -> None:
+        assert clamp_max_results(999_999) == TOOL_MAX_RESULTS_CEILING
+
+    def test_zero_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            clamp_max_results(0)
+
+    def test_negative_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            clamp_max_results(-1)
+
+    def test_non_int_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            clamp_max_results("1000")  # type: ignore[arg-type]
 
 
 class TestClampOffset:
