@@ -10,7 +10,7 @@ Destructive and financial capability groups must be explicitly enabled in
 configuration. Tokens are stored encrypted at rest, refreshed
 automatically, and never logged.
 
-> Status: **v0.1.0** — implements the default read-only v1 tool catalog.
+> Status: **v0.1.1** — implements the default read-only v1 tool catalog.
 > Write tools are deferred to v0.2.
 
 ---
@@ -312,7 +312,7 @@ uv run pytest tests/unit --cov=accela_mcp --cov-report=term-missing
 ACCELA_INTEGRATION_TEST=1 uv run pytest tests/integration -v
 ```
 
-## Limitations (v0.1.0)
+## Limitations (v0.1.1)
 
 - Single-agency, single-environment per running server.
 - Read-only tools shipped by default; write capabilities are v0.2 work.
