@@ -536,26 +536,34 @@ def env_group_var(group_id: str) -> str:
 def apply_env_overrides(loaded: LoadedConfig) -> LoadedConfig:
     """Layer env-var overrides on top of a loaded capabilities config.
 
-    The MCPB extension UI exposes capability toggles, agency, and the
-    write/payment master switches as user_config fields, which the host
-    passes to the subprocess as environment variables. This function makes
-    those env vars authoritative — if set, they override whatever was in
-    ``capabilities.yaml``; if unset, the YAML wins. CLI users (who don't
-    pass these env vars) see no change.
+    The MCPB extension UI exposes Agency / Environment, the **Allow Write
+    Tools** master switch, and the **Allow Real-Money Payments** flag as
+    `user_config` fields, which the host passes to the subprocess as
+    environment variables. This function makes those env vars
+    authoritative when set; CLI users (no env vars set) see no change.
 
     Recognised env vars:
 
-    * ``ACCELA_AGENCY`` — overrides ``capabilities.agency``
-    * ``ACCELA_ENVIRONMENT`` — overrides ``capabilities.environment``
-    * ``ACCELA_GROUP_<NAME>`` (boolean) — enable / disable a capability
-      group. ``NAME`` is the group ID upper-cased
-      (``ACCELA_GROUP_RECORDS_WRITE``, ``ACCELA_GROUP_REPORTS``, ...).
-    * ``ACCELA_WRITES_ENABLED`` (boolean) — overrides ``writes.enabled``.
+    * ``ACCELA_AGENCY`` — overrides ``capabilities.agency``.
+    * ``ACCELA_ENVIRONMENT`` — overrides ``capabilities.environment``.
+    * ``ACCELA_WRITES_ENABLED`` (boolean):
+        - **true** — register every ``*_write`` capability group AND set
+          ``writes.enabled=true``. The kill-switch validator passes
+          because both halves move together.
+        - **false** — strip every ``*_write`` group from
+          ``enabled_groups`` AND set ``writes.enabled=false``. Bundle
+          users can flip the master back and forth without hand-editing
+          ``capabilities.yaml``.
+        - **unset / blank** — defer entirely to the YAML.
     * ``ACCELA_PAYMENTS_REAL_MONEY_ALLOWED`` (boolean) — overrides
       ``payments.real_money_allowed``. Note: in production environments
       this still requires
       ``payments.i_understand_this_spends_real_money: true`` in the YAML
       (intentional friction; not exposed via env).
+
+    Per-group toggles (``ACCELA_GROUP_*``) were removed in 0.5.0 — the
+    Tool Permissions panel in the host (Claude Desktop, etc.) is now the
+    canonical place to allow/deny individual tools.
     """
     raw = loaded.capabilities.model_dump()
 
@@ -564,33 +572,30 @@ def apply_env_overrides(loaded: LoadedConfig) -> LoadedConfig:
     if environment := os.environ.get("ACCELA_ENVIRONMENT", "").strip():
         raw["environment"] = environment
 
-    # Per-group overrides. Start from the YAML's `enabled_groups`; each
-    # `ACCELA_GROUP_<NAME>` env var that's set toggles that group on/off.
+    write_group_ids = {g for g in all_group_ids() if g.endswith("_write")}
     base_groups = (
         set(raw.get("enabled_groups") or [])
         if raw.get("enabled_groups") is not None
         else set(default_groups())
     )
-    touched = False
-    for group_id in all_group_ids():
-        decision = _parse_bool_env(os.environ.get(env_group_var(group_id)))
-        if decision is None:
-            continue
-        touched = True
-        if decision:
-            base_groups.add(group_id)
-        else:
-            base_groups.discard(group_id)
-    if touched:
+
+    writes_decision = _parse_bool_env(os.environ.get("ACCELA_WRITES_ENABLED"))
+    if writes_decision is True:
+        # Master switch on: register every write group and flip
+        # writes.enabled so the kill-switch validator is satisfied.
+        base_groups |= write_group_ids
         raw["enabled_groups"] = sorted(base_groups)
+        raw.setdefault("writes", {})["enabled"] = True
+    elif writes_decision is False:
+        # Master switch off: strip write groups so the kill-switch
+        # validator doesn't reject a YAML that mentioned them.
+        base_groups -= write_group_ids
+        raw["enabled_groups"] = sorted(base_groups)
+        raw.setdefault("writes", {})["enabled"] = False
 
-    if (decision := _parse_bool_env(os.environ.get("ACCELA_WRITES_ENABLED"))) is not None:
-        raw.setdefault("writes", {})["enabled"] = decision
-
-    if (
-        decision := _parse_bool_env(os.environ.get("ACCELA_PAYMENTS_REAL_MONEY_ALLOWED"))
-    ) is not None:
-        raw.setdefault("payments", {})["real_money_allowed"] = decision
+    payments_decision = _parse_bool_env(os.environ.get("ACCELA_PAYMENTS_REAL_MONEY_ALLOWED"))
+    if payments_decision is not None:
+        raw.setdefault("payments", {})["real_money_allowed"] = payments_decision
 
     # Re-validate so cross-field rules (writes kill-switch, admin allowlist,
     # payments friction) re-fire on the merged document. Wrap the pydantic
