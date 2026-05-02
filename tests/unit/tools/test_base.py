@@ -137,3 +137,32 @@ class TestToolCall:
         out = await f()
         assert out["error"] == "invalid_input"
         assert out["message"] == "bad input"
+
+    @pytest.mark.asyncio
+    async def test_401_attaches_login_hint(self) -> None:
+        @tool_call("forbidden")
+        async def f() -> dict[str, int]:
+            raise AccelaAPIError(
+                status=401,
+                code="unauthorized",
+                message="invalid access token",
+                trace_id="t",
+            )
+
+        out = await f()
+        assert out["error"] == "accela_api_error"
+        assert out["status"] == 401
+        assert "accela_login" in out["hint"]
+
+    @pytest.mark.asyncio
+    async def test_non_401_no_login_hint(self) -> None:
+        @tool_call("not-found")
+        async def f() -> dict[str, int]:
+            raise AccelaAPIError(
+                status=404,
+                code="not_found",
+                message="missing",
+            )
+
+        out = await f()
+        assert "hint" not in out

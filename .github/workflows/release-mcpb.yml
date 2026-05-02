@@ -1,0 +1,43 @@
+name: Build MCPB bundle
+
+# Builds the .mcpb bundle and attaches it to the GitHub Release on publish.
+# Runs alongside `publish.yml` (which pushes the package to PyPI).
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Pack and upload .mcpb
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node (for @anthropic-ai/mcpb)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build .mcpb
+        run: ./scripts/build-mcpb.sh
+
+      - name: Locate artifact
+        id: artifact
+        run: |
+          path="$(ls dist/accela-mcp-*.mcpb)"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$path")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "${{ steps.artifact.outputs.path }}" \
+            --clobber

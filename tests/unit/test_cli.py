@@ -278,16 +278,38 @@ class TestSetup:
 
 
 class TestServeMissingConfig:
-    def test_missing_capabilities_yaml_exits_2(self, tmp_path: Path, fernet_key: str) -> None:
-        # No capabilities.yaml at the configured path → graceful exit.
+    def test_missing_capabilities_yaml_enters_bootstrap_mode(
+        self, tmp_path: Path, fernet_key: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A missing capabilities.yaml is no longer fatal — `serve` falls into
+        bootstrap mode so the user can run accela_login from chat. We patch
+        run_stdio_async so the test doesn't actually block on stdin."""
         env = _env(
             fernet_key,
             ACCELA_MCP_TOKEN_PATH=str(tmp_path / "tokens.json"),
             ACCELA_MCP_CONFIG_PATH=str(tmp_path / "capabilities.yaml"),
         )
+
+        async def fake_stdio(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        monkeypatch.setattr("mcp.server.fastmcp.FastMCP.run_stdio_async", fake_stdio)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["serve"], env=env)
+        assert result.exit_code == 0, result.output
+
+    def test_malformed_capabilities_yaml_exits_2(self, tmp_path: Path, fernet_key: str) -> None:
+        """A *malformed* capabilities.yaml is still fatal — that's a real
+        misconfiguration, not a first-run state."""
+        cfg_path = tmp_path / "capabilities.yaml"
+        cfg_path.write_text(":\nthis: [is broken")
+        env = _env(
+            fernet_key,
+            ACCELA_MCP_TOKEN_PATH=str(tmp_path / "tokens.json"),
+            ACCELA_MCP_CONFIG_PATH=str(cfg_path),
+        )
         runner = CliRunner()
         result = runner.invoke(cli, ["serve"], env=env)
         assert result.exit_code == 2
-        assert (
-            "Capability config invalid" in result.output or "capabilities" in result.output.lower()
-        )
+        assert "capabilities" in result.output.lower()

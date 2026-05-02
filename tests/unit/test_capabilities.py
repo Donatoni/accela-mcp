@@ -62,8 +62,8 @@ class TestLoadCapabilities:
             "version: 1\nagency: NULLISLAND\nenvironment: TEST\nenabled_groups:\n  - records_read\n"
         )
         loaded = load_capabilities(cfg)
-        # discovery still added because always-on
-        assert loaded.enabled_groups == {"discovery", "records_read"}
+        # discovery and auth still added because always-on
+        assert loaded.enabled_groups == {"auth", "discovery", "records_read"}
 
     def test_missing_file(self, tmp_path: Path) -> None:
         with pytest.raises(CapabilityConfigError):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 import respx
 
@@ -88,3 +90,72 @@ def test_register_enabled_tools_creates_groups(tool_context: ToolContext) -> Non
     # And a sampling of the actual tools should be present.
     assert mcp._tool_manager.get_tool("accela_get_agency") is not None
     assert mcp._tool_manager.get_tool("accela_search_records") is not None
+
+
+def test_register_enabled_tools_skips_auth_group(tool_context: ToolContext) -> None:
+    """`register_enabled_tools` must not double-register auth — `serve_async`
+    handles auth separately so it works in bootstrap mode."""
+    from mcp.server.fastmcp import FastMCP
+
+    mcp = FastMCP("test-server")
+    # Force auth into the enabled set so we'd notice if it leaked through.
+    tool_context.config.enabled_groups.add("auth")
+
+    registered = register_enabled_tools(mcp, tool_context)
+    assert "auth" not in registered
+    assert mcp._tool_manager.get_tool("accela_login") is None
+
+
+@pytest.mark.asyncio
+async def test_serve_async_bootstrap_mode_when_no_tokens(
+    settings: Settings, loaded_config: LoadedConfig
+) -> None:
+    """When tokens are missing, serve_async should register auth tools and
+    skip the rest. We patch run_stdio_async so we don't actually block."""
+    from accela_mcp.server import serve_async
+
+    captured: dict[str, object] = {}
+
+    async def fake_stdio(self) -> None:  # type: ignore[no-untyped-def]
+        # Snapshot the registered tool names then return so serve_async exits.
+        captured["tool_names"] = set(self._tool_manager._tools.keys())
+
+    with patch("mcp.server.fastmcp.FastMCP.run_stdio_async", new=fake_stdio):
+        await serve_async(settings=settings, config=loaded_config)
+
+    names = captured["tool_names"]
+    assert "accela_login" in names  # type: ignore[operator]
+    assert "accela_auth_status" in names  # type: ignore[operator]
+    # Other groups must NOT have been registered (no tokens means no client).
+    assert "accela_search_records" not in names  # type: ignore[operator]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_serve_async_full_mode_with_tokens(
+    settings: Settings,
+    loaded_config: LoadedConfig,
+    fresh_tokens: Tokens,
+    token_store: TokenStore,
+) -> None:
+    """With valid tokens, serve_async should register both auth and the rest."""
+    from accela_mcp.server import serve_async
+
+    token_store.save(fresh_tokens)
+    # Mock token introspection so the best-effort check doesn't hit the network.
+    respx.get("https://auth.test.example/oauth2/tokeninfo").mock(
+        return_value=__import__("httpx").Response(200, json={"userId": "u1"})
+    )
+
+    captured: dict[str, object] = {}
+
+    async def fake_stdio(self) -> None:  # type: ignore[no-untyped-def]
+        captured["tool_names"] = set(self._tool_manager._tools.keys())
+
+    with patch("mcp.server.fastmcp.FastMCP.run_stdio_async", new=fake_stdio):
+        await serve_async(settings=settings, config=loaded_config)
+
+    names = captured["tool_names"]
+    assert "accela_login" in names  # type: ignore[operator]
+    assert "accela_search_records" in names  # type: ignore[operator]
+    assert "accela_get_agency" in names  # type: ignore[operator]

@@ -19,6 +19,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 GroupId = Literal[
+    "auth",
     "discovery",
     "records_read",
     "records_write",
@@ -42,6 +43,15 @@ GroupId = Literal[
 
 # fmt: off
 _GROUP_CATALOG: dict[str, dict[str, Any]] = {
+    "auth": {
+        "default_on": True, "always_on": True,
+        "scopes": [],  # No API scopes — auth tools talk to the OAuth IdP, not /v4.
+        "module": "accela_mcp.tools.auth",
+        "description": (
+            "Auth status and interactive login (accela_auth_status, accela_login). "
+            "Always available so users can recover from missing or expired tokens."
+        ),
+    },
     "discovery": {
         "default_on": True, "always_on": True,
         "scopes": ["agencies", "settings", "records"],
@@ -409,6 +419,10 @@ def get_tools_by_group_for(enabled: set[str]) -> dict[str, list[str]]:
     decorated names would force-instantiate the entire MCP. Cheap and clear.
     """
     catalog: dict[str, list[str]] = {
+        "auth": [
+            "accela_auth_status",
+            "accela_login",
+        ],
         "discovery": [
             "accela_list_capabilities",
             "accela_get_agency",
@@ -487,6 +501,36 @@ def get_tools_by_group_for(enabled: set[str]) -> dict[str, list[str]]:
     return {g: catalog.get(g, []) for g in sorted(enabled) if g in catalog}
 
 
+def default_capabilities_yaml(agency: str, environment: str) -> str:
+    """A safe default capabilities.yaml for first-run auto-creation.
+
+    Enables the spec's default-on read groups; no writes, no escape hatch.
+    Used by both the CLI `auth` command and the in-chat `accela_login` tool
+    so a successful login leaves a working config behind.
+    """
+    return f"""# Auto-generated on first login.
+# Edit to enable additional capability groups (records_write,
+# inspections_write, payments_*, admin_escape_hatch, ...).
+# `discovery` and `auth` are always on regardless of this list.
+
+version: 1
+agency: {agency}
+environment: {environment}
+
+enabled_groups:
+  - discovery
+  - records_read
+  - inspections_read
+  - documents_read
+  - property_read
+  - people_read
+  - workflow_read
+  - fees_read
+  - reference_data
+  - search
+"""
+
+
 __all__ = [
     "AdminConfig",
     "CacheConfig",
@@ -498,6 +542,7 @@ __all__ = [
     "RateLimitConfig",
     "WritesConfig",
     "all_group_ids",
+    "default_capabilities_yaml",
     "default_groups",
     "get_tools_by_group_for",
     "group_meta",

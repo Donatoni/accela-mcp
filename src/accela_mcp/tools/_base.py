@@ -88,6 +88,14 @@ def tool_call(
                         "Accela agency (EMSE). The agency administrator may need "
                         "to review the script."
                     )
+                elif e.status == 401:
+                    # 401 here means Accela rejected the access token after the
+                    # client already tried a refresh. The user needs a fresh
+                    # interactive login.
+                    payload["hint"] = (
+                        "Accela rejected the access token even after refresh. "
+                        "Run accela_login from chat to re-authenticate, then retry."
+                    )
                 log.warning(
                     "tool_call_error",
                     tool=tool_name,
@@ -146,9 +154,7 @@ def clamp_max_results(max_results: int | None, default: int = 1000) -> int:
     if max_results is None:
         return default
     if not isinstance(max_results, int):
-        raise ValueError(
-            f"max_results must be an integer, got {type(max_results).__name__}"
-        )
+        raise ValueError(f"max_results must be an integer, got {type(max_results).__name__}")
     if max_results < 1:
         raise ValueError("max_results must be >= 1")
     return min(max_results, TOOL_MAX_RESULTS_CEILING)

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
 from pydantic import ValidationError
 
-from accela_mcp.settings import Settings, get_settings
+from accela_mcp.settings import Settings, ensure_mcp_key, get_settings
 
 
 class TestSettings:
@@ -81,3 +83,69 @@ class TestSettings:
         s = get_settings()
         assert s.app_id == "abc"
         assert s.redirect_uri == "http://localhost:8765/cb"
+
+
+class TestEnsureMcpKey:
+    def _isolate(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> Path:
+        """Point default_env_path at a tmp dir and clear ACCELA_MCP_KEY env."""
+        # platformdirs reads XDG_CONFIG_HOME on Linux/macOS; set both for safety.
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("ACCELA_MCP_KEY", raising=False)
+
+        # Re-import default_env_path so it picks up the patched env.
+        from accela_mcp.settings import default_env_path
+
+        return default_env_path()
+
+    def test_generates_when_no_env_no_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        env_path = self._isolate(tmp_path, monkeypatch)
+        assert not env_path.exists()
+
+        ensure_mcp_key()
+
+        assert os.environ["ACCELA_MCP_KEY"]
+        # Round-trip through Fernet to confirm the generated value is valid.
+        Fernet(os.environ["ACCELA_MCP_KEY"].encode())
+        assert env_path.exists()
+        assert "ACCELA_MCP_KEY=" in env_path.read_text(encoding="utf-8")
+
+    def test_picks_up_existing_file_when_env_blank(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fernet_key: str
+    ) -> None:
+        env_path = self._isolate(tmp_path, monkeypatch)
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        env_path.write_text(f'ACCELA_MCP_KEY="{fernet_key}"\n', encoding="utf-8")
+        # Simulate the host passing through an empty value.
+        monkeypatch.setenv("ACCELA_MCP_KEY", "")
+
+        ensure_mcp_key()
+
+        assert os.environ["ACCELA_MCP_KEY"] == fernet_key
+
+    def test_noop_when_env_already_populated(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fernet_key: str
+    ) -> None:
+        self._isolate(tmp_path, monkeypatch)
+        monkeypatch.setenv("ACCELA_MCP_KEY", fernet_key)
+
+        ensure_mcp_key()
+
+        # Unchanged
+        assert os.environ["ACCELA_MCP_KEY"] == fernet_key
+
+    def test_idempotent_on_repeat(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._isolate(tmp_path, monkeypatch)
+
+        ensure_mcp_key()
+        first = os.environ["ACCELA_MCP_KEY"]
+        ensure_mcp_key()
+        second = os.environ["ACCELA_MCP_KEY"]
+
+        assert first == second

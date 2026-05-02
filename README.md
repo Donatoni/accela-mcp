@@ -32,6 +32,23 @@ automatically, and never logged.
 
 ## Install
 
+There are several install paths depending on which host you use. The full
+walkthrough — including a drag-and-drop **Claude Desktop** install, Codex
+config, Cursor config, and troubleshooting — lives in
+[`docs/INSTALL.md`](docs/INSTALL.md). The summary:
+
+- **Claude Desktop, no terminal:** download the latest `.mcpb` from
+  [Releases](https://github.com/Donatoni/accela-mcp/releases), drag it
+  into Settings → Extensions, fill in App ID + Secret in the config tab,
+  then ask Claude *“log me into Accela.”*
+- **CLI for Claude Desktop and/or Codex:** `uv tool install accela-mcp`
+  then `accela-mcp setup` — auto-configures both apps in one command.
+- **Cursor / generic stdio:** point the host at `accela-mcp serve`; see
+  [`docs/INSTALL.md`](docs/INSTALL.md#d-cursor--generic-stdio).
+
+The rest of this section covers the CLI install — see the doc above for
+the drag-drop path.
+
 For normal use, install the published CLI from
 [PyPI](https://pypi.org/project/accela-mcp/) with `uv`:
 
