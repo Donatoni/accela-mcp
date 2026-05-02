@@ -55,7 +55,7 @@ capabilities.yaml
 !capabilities.yaml.example
 
 # Local handoff/reference material
-docs/
+prompt/
 DEVIATIONS.md
 CHANGELOG.md
 deviations.md
