@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from accela_mcp.tools._base import ToolContext, tool_call
+from accela_mcp.tools._base import ToolContext, read_only_annotations, tool_call
 
 # Keep base64 payloads bounded so we don't fill the MCP transport with huge
 # binaries. Tools should refuse to return more than this; for big files the
@@ -16,7 +16,7 @@ MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Record Documents"))
     @tool_call("accela_list_record_documents")
     async def accela_list_record_documents(record_id: str) -> dict[str, Any]:
         """Lists documents attached to a record (filenames, types, sizes,
@@ -27,7 +27,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await ctx.client.get(f"/v4/records/{record_id}/documents")
         return {"documents": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Download Document"))
     @tool_call("accela_download_document")
     async def accela_download_document(
         document_id: str,

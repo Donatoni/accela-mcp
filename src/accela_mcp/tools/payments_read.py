@@ -10,11 +10,11 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from accela_mcp.tools._base import ToolContext, tool_call
+from accela_mcp.tools._base import ToolContext, read_only_annotations, tool_call
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Record Payments"))
     @tool_call("accela_list_record_payments")
     async def accela_list_record_payments(record_id: str) -> dict[str, Any]:
         """Lists payments associated with a record (amounts, methods,

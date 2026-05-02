@@ -4,7 +4,7 @@ Reports are agency-configured exports/queries. `list_reports` is purely
 informational; `run_report` does trigger server-side work but doesn't
 mutate user-visible records, so we treat it as a read-style tool with
 explicit parameter validation rather than wiring it through the
-`write_tool` confirmation pattern.
+`destructive_annotations` confirmation pattern.
 
 If a particular agency's reports DO have side effects (some configure
 SQL UPDATEs behind a "report"), the agency admin should not enable the
@@ -18,11 +18,16 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from accela_mcp.tools._base import ToolContext, tool_call
+from accela_mcp.tools._base import (
+    ToolContext,
+    destructive_annotations,
+    read_only_annotations,
+    tool_call,
+)
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Reports"))
     @tool_call("accela_list_reports")
     async def accela_list_reports(
         module: str | None = None,
@@ -35,7 +40,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await ctx.client.get("/v4/reports", params=params or None)
         return {"reports": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Run Report"))
     @tool_call("accela_run_report")
     async def accela_run_report(
         report_id: str,

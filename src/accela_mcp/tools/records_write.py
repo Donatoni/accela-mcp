@@ -23,11 +23,11 @@ from mcp.server.fastmcp import FastMCP
 
 from accela_mcp.api.errors import AccelaAPIError
 from accela_mcp.safety import WritePreview, write_tool
-from accela_mcp.tools._base import ToolContext
+from accela_mcp.tools._base import ToolContext, destructive_annotations
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Create Record (Partial)"))
     @write_tool("accela_create_record_partial", ctx)
     async def accela_create_record_partial(
         record_type: str,
@@ -93,7 +93,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "result": response.get("result"),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Finalize Record"))
     @write_tool("accela_finalize_record", ctx)
     async def accela_finalize_record(
         record_id: str,
@@ -136,7 +136,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "result": response.get("result"),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Update Record"))
     @write_tool("accela_update_record", ctx)
     async def accela_update_record(
         record_id: str,

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "accela-mcp"
-version = "0.4.2"
+version = "0.4.3"
 description = "Model Context Protocol server for the Accela Construct API"
 readme = "README.md"
 license = { text = "Apache-2.0" }

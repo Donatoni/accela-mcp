@@ -11,13 +11,14 @@ from accela_mcp.tools._base import (
     ToolContext,
     clamp_limit,
     clamp_offset,
+    read_only_annotations,
     tool_call,
 )
 from accela_mcp.utils.ids import join_ids
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Inspections for Record"))
     @tool_call("accela_list_inspections_for_record")
     async def accela_list_inspections_for_record(
         record_id: str,
@@ -38,7 +39,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "page": result.get("page") or {},
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Inspection"))
     @tool_call("accela_get_inspection")
     async def accela_get_inspection(inspection_ids: list[str]) -> dict[str, Any]:
         """Retrieves full details for one or more inspections by ID, including
@@ -48,7 +49,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await ctx.client.get(f"/v4/inspections/{joined}")
         return {"inspections": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Inspection History"))
     @tool_call("accela_get_inspection_history")
     async def accela_get_inspection_history(inspection_ids: list[str]) -> dict[str, Any]:
         """Returns the audit history for one or more inspections — status
@@ -58,7 +59,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await ctx.client.get(f"/v4/inspections/{joined}/histories")
         return {"history": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Inspection Checklists"))
     @tool_call("accela_get_inspection_checklists")
     async def accela_get_inspection_checklists(inspection_id: str) -> dict[str, Any]:
         """Returns the checklists and checklist items associated with an

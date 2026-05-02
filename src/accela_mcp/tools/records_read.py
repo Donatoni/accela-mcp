@@ -14,6 +14,7 @@ from accela_mcp.tools._base import (
     clamp_max_results,
     clamp_offset,
     first_result,
+    read_only_annotations,
     tool_call,
 )
 
@@ -31,7 +32,7 @@ ALLOWED_EXPANSIONS = frozenset(
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Search Records"))
     @tool_call("accela_search_records")
     async def accela_search_records(
         module: str | None = None,
@@ -122,7 +123,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "continuation": None,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Record"))
     @tool_call("accela_get_record")
     async def accela_get_record(
         record_id: str,
@@ -151,7 +152,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             return {"error": "not_found", "record_id": record_id}
         return record
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get My Records"))
     @tool_call("accela_get_my_records")
     async def accela_get_my_records(
         limit: int = 25,
@@ -206,7 +207,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "continuation": None,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Record Custom Data"))
     @tool_call("accela_get_record_custom_data")
     async def accela_get_record_custom_data(record_id: str) -> dict[str, Any]:
         """Reads agency-specific custom form and custom table data for a

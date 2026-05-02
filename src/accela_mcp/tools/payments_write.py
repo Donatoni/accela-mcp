@@ -22,11 +22,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from accela_mcp.safety import WritePreview, write_tool
-from accela_mcp.tools._base import ToolContext
+from accela_mcp.tools._base import ToolContext, destructive_annotations
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Initiate Payment"))
     @write_tool("accela_initiate_payment", ctx, affects_money=True)
     async def accela_initiate_payment(
         record_id: str,
@@ -88,7 +88,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "result": response.get("result"),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Commit Payment"))
     @write_tool("accela_commit_payment", ctx, affects_money=True)
     async def accela_commit_payment(
         payment_id: str,

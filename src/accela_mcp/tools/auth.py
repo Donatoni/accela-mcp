@@ -27,7 +27,7 @@ from accela_mcp.capabilities import (
     scopes_for,
 )
 from accela_mcp.settings import Settings
-from accela_mcp.tools._base import tool_call
+from accela_mcp.tools._base import auth_login_annotations, read_only_annotations, tool_call
 
 # Read groups that are safe to default to during in-chat login when there's
 # no capabilities.yaml on disk yet. Mirrors the CLI's setup defaults.
@@ -59,7 +59,7 @@ class AuthContext:
 
 
 def register(mcp: FastMCP, ctx: AuthContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Auth Status", open_world=False))
     @tool_call("accela_auth_status")
     async def accela_auth_status() -> dict[str, Any]:
         """Reports the current Accela authentication state. No API call.
@@ -113,7 +113,7 @@ def register(mcp: FastMCP, ctx: AuthContext) -> None:
             "seconds_until_refresh_expires": tokens.seconds_until_refresh_expires(),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=auth_login_annotations("Log In to Accela"))
     @tool_call("accela_login")
     async def accela_login(
         agency: str | None = None,

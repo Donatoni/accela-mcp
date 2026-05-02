@@ -11,11 +11,11 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from accela_mcp.tools._base import ToolContext, tool_call
+from accela_mcp.tools._base import ToolContext, read_only_annotations, tool_call
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Geocode"))
     @tool_call("accela_geocode")
     async def accela_geocode(
         address: str | None = None,
@@ -46,7 +46,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await ctx.client.get("/v4/gis/geocode", params=params)
         return {"matches": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Reverse Geocode"))
     @tool_call("accela_reverse_geocode")
     async def accela_reverse_geocode(
         latitude: float,

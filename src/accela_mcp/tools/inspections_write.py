@@ -22,11 +22,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from accela_mcp.safety import WritePreview, write_tool
-from accela_mcp.tools._base import ToolContext
+from accela_mcp.tools._base import ToolContext, destructive_annotations
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Schedule Inspection"))
     @write_tool("accela_schedule_inspection", ctx)
     async def accela_schedule_inspection(
         record_id: str,
@@ -87,7 +87,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "result": response.get("result"),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Reschedule Inspection"))
     @write_tool("accela_reschedule_inspection", ctx)
     async def accela_reschedule_inspection(
         inspection_id: str,
@@ -137,7 +137,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "result": response.get("result"),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Cancel Inspection"))
     @write_tool("accela_cancel_inspection", ctx)
     async def accela_cancel_inspection(
         inspection_id: str,
@@ -180,7 +180,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "result": response.get("result"),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Result Inspection"))
     @write_tool("accela_result_inspection", ctx)
     async def accela_result_inspection(
         inspection_id: str,
@@ -230,7 +230,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "result": response.get("result"),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Assign Inspection"))
     @write_tool("accela_assign_inspection", ctx)
     async def accela_assign_inspection(
         inspection_id: str,

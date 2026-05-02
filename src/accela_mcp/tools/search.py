@@ -6,11 +6,11 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from accela_mcp.tools._base import ToolContext, clamp_limit, tool_call
+from accela_mcp.tools._base import ToolContext, clamp_limit, read_only_annotations, tool_call
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Global Search"))
     @tool_call("accela_global_search")
     async def accela_global_search(query: str, limit: int = 25) -> dict[str, Any]:
         """Free-text search across records, addresses, parcels, contacts,

@@ -11,7 +11,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from accela_mcp.tools._base import ToolContext, tool_call
+from accela_mcp.tools._base import ToolContext, read_only_annotations, tool_call
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
@@ -30,7 +30,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             lambda: ctx.client.get(path, params=params),
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Record Types"))
     @tool_call("accela_list_record_types")
     async def accela_list_record_types(
         module: str | None = None,
@@ -47,7 +47,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         )
         return {"record_types": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Inspection Types"))
     @tool_call("accela_list_inspection_types")
     async def accela_list_inspection_types(
         module: str | None = None,
@@ -68,7 +68,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         )
         return {"inspection_types": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Record Statuses"))
     @tool_call("accela_list_record_statuses")
     async def accela_list_record_statuses(
         module: str | None = None,
@@ -83,7 +83,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         )
         return {"statuses": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Departments"))
     @tool_call("accela_list_departments")
     async def accela_list_departments(
         cache_bypass: bool = False,
@@ -92,7 +92,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await _get("/v4/settings/departments", None, cache_bypass=cache_bypass)
         return {"departments": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Fee Schedules"))
     @tool_call("accela_list_fee_schedules")
     async def accela_list_fee_schedules(
         cache_bypass: bool = False,

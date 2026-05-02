@@ -19,13 +19,13 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from accela_mcp.safety import WritePreview, write_tool
-from accela_mcp.tools._base import ToolContext
+from accela_mcp.tools._base import ToolContext, destructive_annotations
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB raw — under the 25 MB inline-download cap
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Upload Document to Record"))
     @write_tool("accela_upload_document_to_record", ctx)
     async def accela_upload_document_to_record(
         record_id: str,

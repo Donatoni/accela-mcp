@@ -20,11 +20,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from accela_mcp.safety import WritePreview, write_tool
-from accela_mcp.tools._base import ToolContext
+from accela_mcp.tools._base import ToolContext, destructive_annotations
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Update Workflow Task"))
     @write_tool("accela_update_workflow_task", ctx)
     async def accela_update_workflow_task(
         record_id: str,

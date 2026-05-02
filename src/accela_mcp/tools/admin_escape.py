@@ -17,7 +17,7 @@ from typing import Any, Literal
 from mcp.server.fastmcp import FastMCP
 
 from accela_mcp.observability.logging_config import get_logger
-from accela_mcp.tools._base import ToolContext, tool_call
+from accela_mcp.tools._base import ToolContext, destructive_annotations, tool_call
 from accela_mcp.utils.ids import is_safe_api_path
 
 log = get_logger(__name__)
@@ -30,7 +30,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
     compiled_patterns = [re.compile(p) for p in admin_cfg.raw_request_allowed_paths]
     allowed_methods = set(admin_cfg.raw_request_allowed_methods)
 
-    @mcp.tool()
+    @mcp.tool(annotations=destructive_annotations("Raw API Request"))
     @tool_call("accela_raw_request")
     async def accela_raw_request(
         method: HttpMethod,

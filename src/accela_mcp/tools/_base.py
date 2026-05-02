@@ -16,6 +16,8 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any, ParamSpec, TypeVar
 
+from mcp.types import ToolAnnotations
+
 from accela_mcp.api.client import AccelaClient
 from accela_mcp.api.errors import AccelaAPIError, is_likely_emse_error
 from accela_mcp.capabilities import LoadedConfig, PaymentsConfig, WritesConfig
@@ -172,6 +174,61 @@ def first_result(payload: dict[str, Any]) -> Any:
     return result
 
 
+def read_only_annotations(title: str, *, open_world: bool = True) -> ToolAnnotations:
+    """ToolAnnotations for a read-only tool.
+
+    Sets `readOnlyHint=True` and `destructiveHint=False` so the host UI
+    (Claude Desktop, etc.) can group these under a "Read-only tools"
+    section. `idempotentHint=True` because GETs/lists are idempotent.
+    `openWorldHint` defaults to True since most read tools query the
+    Accela API; set to False for tools that only touch local state.
+    """
+    return ToolAnnotations(
+        title=title,
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=open_world,
+    )
+
+
+def destructive_annotations(title: str, *, idempotent: bool = False) -> ToolAnnotations:
+    """ToolAnnotations for a write/destructive tool.
+
+    Sets `destructiveHint=True` so the host UI groups these separately.
+    `idempotentHint=False` by default — reissuing a write may produce
+    different results — but tools whose semantics are idempotent
+    (e.g. update with same payload) can pass `idempotent=True`.
+
+    Named with the `_annotations` suffix to avoid collision with
+    `accela_mcp.safety.write_tool`, which is the dry-run / audit-log
+    decorator that wraps each write tool's body.
+    """
+    return ToolAnnotations(
+        title=title,
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=idempotent,
+        openWorldHint=True,
+    )
+
+
+def auth_login_annotations(title: str = "Log In to Accela") -> ToolAnnotations:
+    """Annotations for the OAuth login tool.
+
+    Not read-only (it persists tokens) and not destructive in the data
+    sense (it adds a token; it doesn't delete anything Accela cares
+    about). `openWorldHint=True` — opens a browser and talks to the IdP.
+    """
+    return ToolAnnotations(
+        title=title,
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+
+
 def normalize_yn(value: Any) -> bool | None:
     """Convert Accela's `Y`/`N` string booleans to native Python booleans."""
     if value is None:
@@ -191,10 +248,13 @@ __all__ = [
     "TOOL_LIMIT_MAX",
     "TOOL_MAX_RESULTS_CEILING",
     "ToolContext",
+    "auth_login_annotations",
     "clamp_limit",
     "clamp_max_results",
     "clamp_offset",
+    "destructive_annotations",
     "first_result",
     "normalize_yn",
+    "read_only_annotations",
     "tool_call",
 ]

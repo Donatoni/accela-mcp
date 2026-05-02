@@ -12,13 +12,14 @@ from accela_mcp.tools._base import (
     clamp_limit,
     clamp_max_results,
     clamp_offset,
+    read_only_annotations,
     tool_call,
 )
 from accela_mcp.utils.ids import join_ids
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Contact"))
     @tool_call("accela_get_contact")
     async def accela_get_contact(contact_ids: list[str]) -> dict[str, Any]:
         """Retrieves one or more contacts by ID."""
@@ -26,7 +27,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await ctx.client.get(f"/v4/contacts/{joined}")
         return {"contacts": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Search Contacts"))
     @tool_call("accela_search_contacts")
     async def accela_search_contacts(
         name: str | None = None,
@@ -98,7 +99,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "continuation": None,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Professional"))
     @tool_call("accela_get_professional")
     async def accela_get_professional(professional_ids: list[str]) -> dict[str, Any]:
         """Retrieves one or more licensed professionals by ID, including
@@ -107,7 +108,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         result = await ctx.client.get(f"/v4/professionals/{joined}")
         return {"professionals": result.get("result") or []}
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Search Professionals"))
     @tool_call("accela_search_professionals")
     async def accela_search_professionals(
         name: str | None = None,

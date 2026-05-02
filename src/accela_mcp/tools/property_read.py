@@ -13,6 +13,7 @@ from accela_mcp.tools._base import (
     clamp_max_results,
     clamp_offset,
     first_result,
+    read_only_annotations,
     tool_call,
 )
 
@@ -20,7 +21,7 @@ ALLOWED_PARCEL_EXPANSIONS = frozenset({"addresses", "owners", "records"})
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Address"))
     @tool_call("accela_get_address")
     async def accela_get_address(address_id: str) -> dict[str, Any]:
         """Retrieves an address record (formatted address, geo coordinates if
@@ -34,7 +35,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             return {"error": "not_found", "address_id": address_id}
         return result
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Search Addresses"))
     @tool_call("accela_search_addresses")
     async def accela_search_addresses(
         street: str | None = None,
@@ -106,7 +107,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "continuation": None,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Parcel"))
     @tool_call("accela_get_parcel")
     async def accela_get_parcel(
         parcel_id: str,
@@ -133,7 +134,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             return {"error": "not_found", "parcel_id": parcel_id}
         return result
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Owners for Parcel"))
     @tool_call("accela_get_owners_for_parcel")
     async def accela_get_owners_for_parcel(parcel_id: str) -> dict[str, Any]:
         """Lists owners associated with a parcel."""

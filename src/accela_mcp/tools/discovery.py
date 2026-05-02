@@ -15,11 +15,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from accela_mcp.capabilities import get_tools_by_group_for
-from accela_mcp.tools._base import ToolContext, tool_call
+from accela_mcp.tools._base import ToolContext, read_only_annotations, tool_call
 
 
 def register(mcp: FastMCP, ctx: ToolContext) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("List Capabilities", open_world=False))
     @tool_call("accela_list_capabilities")
     async def accela_list_capabilities() -> dict[str, Any]:
         """Lists which capability groups and tools are currently enabled, plus the
@@ -34,7 +34,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
             "tools_by_group": get_tools_by_group_for(ctx.config.enabled_groups),
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Get Agency Details"))
     @tool_call("accela_get_agency")
     async def accela_get_agency() -> dict[str, Any]:
         """Retrieves the connected agency's metadata: name, address, configured
@@ -42,7 +42,7 @@ def register(mcp: FastMCP, ctx: ToolContext) -> None:
         payload."""
         return await ctx.client.get(f"/v4/agencies/{ctx.client.agency}")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only_annotations("Describe Record Metadata"))
     @tool_call("accela_describe_record_metadata")
     async def accela_describe_record_metadata(
         record_id: str | None = None,
