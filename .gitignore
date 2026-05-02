@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Virtualenvs
+.venv/
+venv/
+env/
+.env
+.envrc
+
+# Lock files (allow uv.lock if present)
+# uv.lock is intentionally NOT ignored
+
+# Tooling
+.tox/
+.mypy_cache/
+.dmypy.json
+.ipynb_checkpoints/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Secrets and tokens — never commit these
+*.env
+!.env.example
+tokens.json
+*.pem
+*.key
+secrets/
+
+# Local config
+capabilities.yaml
+!capabilities.yaml.example
+
+# Local handoff/reference material
+docs/
+DEVIATIONS.md
+CHANGELOG.md
+deviations.md
+changelog.md
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store

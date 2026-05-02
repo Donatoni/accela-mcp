@@ -1,0 +1,65 @@
+# Accela MCP — capability configuration
+#
+# Copy this file to the path indicated by ACCELA_MCP_CONFIG_PATH (or the
+# default, ~/.config/accela-mcp/capabilities.yaml on Linux/Mac), and edit.
+
+version: 1
+
+# Required. The Accela agency this server connects to. Must match the agency
+# the OAuth tokens were issued for.
+agency: NULLISLAND
+
+# Required. The agency environment (DEV, TEST, STAGE, PROD — depends on agency
+# config). Sandbox agencies typically use TEST.
+environment: TEST
+
+# Optional. The set of capability groups to enable. If omitted, the spec's
+# default-on groups are used. If specified, this list REPLACES the defaults —
+# you must list every group you want enabled.
+#
+# `discovery` is always enabled even if not listed.
+enabled_groups:
+  - discovery
+  - records_read
+  - inspections_read
+  - documents_read
+  - property_read
+  - people_read
+  - workflow_read
+  - fees_read
+  - reference_data
+  - search
+
+  # Default-off groups — uncomment with caution:
+  # - records_write
+  # - inspections_write
+  # - documents_write
+  # - workflow_write
+  # - payments_read
+  # - payments_write
+  # - gis
+  # - reports
+  # - admin_escape_hatch   # also requires `admin.raw_request_allowed_paths` below
+
+# Optional. Retry/backoff knobs. Defaults shown.
+rate_limit:
+  max_retries: 3              # initial attempt + N retries; matches Accela's reality
+  base_backoff_seconds: 1
+  max_backoff_seconds: 60
+
+# Optional. Logging. Defaults shown.
+logging:
+  level: INFO                 # DEBUG | INFO | WARNING | ERROR
+  format: json                # json (production) | console (human-readable)
+
+# Optional. In-memory TTL cache for reference-data tools.
+cache:
+  reference_data_ttl_seconds: 3600   # 1 hour — these endpoints change rarely
+
+# Required when admin_escape_hatch is enabled. Regex allowlist of API paths
+# `accela_raw_request` may target. The MCP refuses to start if this is missing
+# while the group is enabled.
+# admin:
+#   raw_request_allowed_paths:
+#     - "^/v4/records(/.*)?$"
+#     - "^/v4/settings/.*$"
