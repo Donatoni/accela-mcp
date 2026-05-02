@@ -29,22 +29,39 @@ automatically, and never logged.
 
 ## Install
 
+For normal use, install the published CLI from
+[PyPI](https://pypi.org/project/accela-mcp/) with `uv`:
+
 ```bash
-# From PyPI (after publish)
-pip install accela-mcp
-
-# From source
-git clone https://github.com/Donatoni/accela-mcp.git
-cd accela-mcp
-pip install -e ".[dev]"
-
-# Or with uv (recommended)
 uv tool install accela-mcp
+```
+
+`uv tool install` creates an isolated Python environment for the tool and
+puts the `accela-mcp` command on your PATH. To update later:
+
+```bash
+uv tool upgrade accela-mcp
+```
+
+If you prefer `pip`, this also works:
+
+```bash
+python -m pip install accela-mcp
+```
+
+For release testing only, the package is also published on
+[TestPyPI](https://test.pypi.org/project/accela-mcp/):
+
+```bash
+uv tool install \
+  --index https://test.pypi.org/simple/ \
+  --default-index https://pypi.org/simple/ \
+  accela-mcp
 ```
 
 ## Easy Setup
 
-For most users, run the guided setup wizard:
+After installing, run the guided setup wizard:
 
 ```bash
 accela-mcp setup
@@ -278,21 +295,21 @@ accela-mcp doctor
 ## Development
 
 ```bash
-# Install dev deps.
-uv pip install -e ".[dev]"
+# Install the project and dev dependencies.
+uv sync --extra dev
 
 # Lint + format.
-ruff check
-ruff format --check
+uv run ruff check
+uv run ruff format --check
 
-# Unit tests (mocked HTTP — no real API).
-pytest tests/unit -v
+# Unit tests (mocked HTTP; no real API).
+uv run pytest tests/unit -v
 
 # Coverage.
-pytest tests/unit --cov=accela_mcp --cov-report=term-missing
+uv run pytest tests/unit --cov=accela_mcp --cov-report=term-missing
 
 # Integration tests (real sandbox; gated).
-ACCELA_INTEGRATION_TEST=1 pytest tests/integration -v
+ACCELA_INTEGRATION_TEST=1 uv run pytest tests/integration -v
 ```
 
 ## Limitations (v0.1.0)
